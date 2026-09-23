@@ -16,12 +16,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const isLocal = isLocalEnvironment();
-
   return (
     <html lang="en" className="dark">
       <body className={`${inter.className} min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-blue-600 selection:text-white`}>
-        <Header isLocal={isLocal} />
+        <Header />
         <main className="max-w-7xl mx-auto px-6 py-8">
           {children}
         </main>

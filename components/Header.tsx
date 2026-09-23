@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Layers,
   FolderGit2,
@@ -14,14 +14,21 @@ import {
   CheckCircle,
 } from "lucide-react";
 
-interface HeaderProps {
-  isLocal?: boolean;
-}
-
-export default function Header({ isLocal = true }: HeaderProps) {
+export default function Header() {
   const pathname = usePathname();
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
+  const [isLocal, setIsLocal] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const isLocalHost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname.endsWith(".local");
+      setIsLocal(isLocalHost);
+    }
+  }, []);
 
   const handleScan = async () => {
     setScanning(true);

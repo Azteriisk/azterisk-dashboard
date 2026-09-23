@@ -5,7 +5,7 @@ import { Folder, FolderPlus, Trash2, CheckCircle2, AlertCircle, RefreshCw, HardD
 
 export default function DirectoryManager() {
   const [directories, setDirectories] = useState<string[]>([]);
-  const [isLocal, setIsLocal] = useState(true);
+  const [isLocal, setIsLocal] = useState(false);
   const [newDir, setNewDir] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -16,7 +16,12 @@ export default function DirectoryManager() {
       const data = await res.json();
       if (data.directories) {
         setDirectories(data.directories);
-        setIsLocal(data.is_local);
+        const isLocalHost =
+          typeof window !== "undefined" &&
+          (window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1" ||
+            window.location.hostname.endsWith(".local"));
+        setIsLocal(isLocalHost && data.is_local);
       }
     } catch {
       setMessage({ type: "error", text: "Failed to fetch indexed directories" });

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCatalogData, computeWorkspaceStats } from "@/lib/catalog";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const catalog = await getCatalogData();

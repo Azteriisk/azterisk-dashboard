@@ -12,6 +12,9 @@ const BUNDLED_CATALOG_PATH = path.join(process.cwd(), "data", "catalog.json");
 const BUNDLED_CONFIG_PATH = path.join(process.cwd(), "data", "catalog-config.json");
 
 export function isLocalEnvironment(): boolean {
+  if (process.env.VERCEL === "1" || process.env.NOW_REGION) {
+    return false;
+  }
   try {
     return fs.existsSync("/home/azterisk/Projects");
   } catch {

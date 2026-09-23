@@ -1,18 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Project } from "@/lib/types";
 import { GitBranch, GitCommit, Check, AlertCircle, RefreshCw, Box, ExternalLink } from "lucide-react";
 
 interface ProjectCardProps {
   project: Project;
-  isLocal?: boolean;
   onSyncComplete?: () => void;
 }
 
-export default function ProjectCard({ project, isLocal = true, onSyncComplete }: ProjectCardProps) {
+export default function ProjectCard({ project, onSyncComplete }: ProjectCardProps) {
   const [syncing, setSyncing] = useState(false);
   const [syncDone, setSyncDone] = useState(false);
+  const [isLocal, setIsLocal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const isLocalHost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname.endsWith(".local");
+      setIsLocal(isLocalHost);
+    }
+  }, []);
 
   const handleSync = async () => {
     setSyncing(true);

@@ -3,6 +3,8 @@ import fs from "fs";
 import path from "path";
 import { getCatalogConfig, saveCatalogConfig, triggerRescan, isLocalEnvironment } from "@/lib/catalog";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const config = await getCatalogConfig();
