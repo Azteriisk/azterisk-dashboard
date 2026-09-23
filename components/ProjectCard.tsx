@@ -2,11 +2,23 @@
 
 import { useState, useEffect } from "react";
 import { Project } from "@/lib/types";
-import { GitBranch, GitCommit, Check, AlertCircle, RefreshCw, Box, ExternalLink } from "lucide-react";
+import { GitBranch, GitCommit, Check, AlertCircle, RefreshCw, Box, Clock } from "lucide-react";
 
 interface ProjectCardProps {
   project: Project;
   onSyncComplete?: () => void;
+}
+
+function formatCommitTime(timestamp?: number | null, dateStr?: string | null): string {
+  if (!timestamp && !dateStr) return "";
+  const time = timestamp ? timestamp * 1000 : new Date(dateStr!).getTime();
+  const diffSec = Math.floor((Date.now() - time) / 1000);
+  if (diffSec < 60) return "just now";
+  if (diffSec < 3600) return `${Math.max(1, Math.floor(diffSec / 60))}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  if (diffSec < 86400 * 30) return `${Math.floor(diffSec / 86400)}d ago`;
+  if (diffSec < 86400 * 365) return `${Math.floor(diffSec / (86400 * 30))}mo ago`;
+  return `${Math.floor(diffSec / (86400 * 365))}y ago`;
 }
 
 export default function ProjectCard({ project, onSyncComplete }: ProjectCardProps) {
@@ -80,40 +92,45 @@ export default function ProjectCard({ project, onSyncComplete }: ProjectCardProp
   };
 
   return (
-    <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5 hover:border-[#665c54] transition flex flex-col justify-between">
+    <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5 hover:border-[#665c54] transition flex flex-col justify-between overflow-hidden">
       <div>
         {/* Header */}
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="flex items-center space-x-2">
-              <h3 className="font-bold text-[#fbf1c7] text-base tracking-tight">{project.name}</h3>
+        <div className="flex items-start justify-between gap-2.5">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <h3
+                className="font-bold text-[#fbf1c7] text-base tracking-tight break-words min-w-0"
+                title={project.name}
+              >
+                {project.name}
+              </h3>
               <span
-                className={`text-[10px] uppercase font-mono font-semibold px-2 py-0.5 rounded-md border ${getEcoColor(
+                className={`text-[10px] uppercase font-mono font-semibold px-1.5 py-0.5 rounded-md border shrink-0 ${getEcoColor(
                   project.ecosystem
                 )}`}
               >
                 {project.ecosystem}
               </span>
             </div>
-            <p className="text-[11px] font-mono text-[#a89984] mt-1 truncate max-w-xs">
+            <p className="text-[11px] font-mono text-[#a89984] mt-1 truncate" title={project.path}>
               {project.path}
             </p>
           </div>
 
           {/* Drift Status Badge */}
-          <div>
+          <div className="shrink-0 pt-0.5">
             {project.is_drifted ? (
-              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium bg-[#fb4934]/15 text-[#fb4934] border border-[#fb4934]/30">
-                <AlertCircle className="w-3 h-3" />
+              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium bg-[#fb4934]/15 text-[#fb4934] border border-[#fb4934]/30 whitespace-nowrap">
+                <AlertCircle className="w-3 h-3 shrink-0" />
                 <span>Drifted</span>
               </span>
             ) : !project.is_pinned && project.pkgbuild_path ? (
-              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium bg-[#fabd2f]/15 text-[#fabd2f] border border-[#fabd2f]/30">
+              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium bg-[#fabd2f]/15 text-[#fabd2f] border border-[#fabd2f]/30 whitespace-nowrap">
                 <span>Unpinned</span>
               </span>
             ) : (
-              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium bg-[#b8bb26]/15 text-[#b8bb26] border border-[#b8bb26]/30">
-                <Check className="w-3 h-3" />
+              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium bg-[#b8bb26]/15 text-[#b8bb26] border border-[#b8bb26]/30 whitespace-nowrap">
+                <Check className="w-3 h-3 shrink-0" />
                 <span>Synced</span>
               </span>
             )}
@@ -123,14 +140,19 @@ export default function ProjectCard({ project, onSyncComplete }: ProjectCardProp
         {/* Plugin Metadata if applicable */}
         {project.manifest_id && (
           <div className="mt-3 p-2.5 rounded-lg bg-[#282828] border border-[#3c3836] text-xs">
-            <div className="flex justify-between text-[#a89984] text-[11px]">
-              <span>Quattro Plugin:</span>
-              <span className="font-mono text-[#83a598]">{project.manifest_id}</span>
+            <div className="flex items-center justify-between text-[#a89984] text-[11px] gap-2">
+              <span className="shrink-0">Quattro Plugin:</span>
+              <span
+                className="font-mono text-[#83a598] truncate text-right"
+                title={project.manifest_id}
+              >
+                {project.manifest_id}
+              </span>
             </div>
             {project.manifest_version && (
-              <div className="flex justify-between text-[#a89984] text-[11px] mt-1">
-                <span>Version:</span>
-                <span className="text-[#ebdbb2] font-mono">{project.manifest_version}</span>
+              <div className="flex items-center justify-between text-[#a89984] text-[11px] mt-1 gap-2">
+                <span className="shrink-0">Version:</span>
+                <span className="text-[#ebdbb2] font-mono text-right">{project.manifest_version}</span>
               </div>
             )}
           </div>
@@ -163,6 +185,21 @@ export default function ProjectCard({ project, onSyncComplete }: ProjectCardProp
               </span>
             </div>
           )}
+
+          {project.git_commit_timestamp ? (
+            <div className="flex items-center justify-between text-[#a89984]">
+              <span className="flex items-center space-x-1 text-[11px]">
+                <Clock className="w-3.5 h-3.5 text-[#928374]" />
+                <span>Last Commit</span>
+              </span>
+              <span
+                className="font-mono text-[11px] text-[#fabd2f] truncate max-w-[170px] text-right"
+                title={project.git_commit_message || project.git_commit_date || undefined}
+              >
+                {formatCommitTime(project.git_commit_timestamp, project.git_commit_date)}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
 

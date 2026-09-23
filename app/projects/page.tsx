@@ -30,6 +30,13 @@ export default function ProjectsPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const eco = params.get("ecosystem");
+      const status = params.get("status");
+      if (eco) setSelectedEco(eco);
+      if (status) setSelectedStatus(status);
+    }
     fetchProjects();
   }, []);
 
@@ -37,20 +44,22 @@ export default function ProjectsPage() {
   const ecosystems = ["all", ...detectedEcos];
   const statuses = ["all", "drifted", "unpinned", "synced"];
 
-  const filtered = projects.filter((p) => {
-    const matchesEco = selectedEco === "all" || p.ecosystem.toLowerCase() === selectedEco.toLowerCase();
-    const matchesStatus =
-      selectedStatus === "all" ||
-      (selectedStatus === "drifted" && p.is_drifted) ||
-      (selectedStatus === "unpinned" && !p.is_pinned && p.pkgbuild_path) ||
-      (selectedStatus === "synced" && !p.is_drifted && (p.is_pinned || !p.pkgbuild_path));
-    const matchesQuery =
-      p.name.toLowerCase().includes(query.toLowerCase()) ||
-      p.path.toLowerCase().includes(query.toLowerCase()) ||
-      (p.manifest_id && p.manifest_id.toLowerCase().includes(query.toLowerCase()));
+  const filtered = projects
+    .filter((p) => {
+      const matchesEco = selectedEco === "all" || p.ecosystem.toLowerCase() === selectedEco.toLowerCase();
+      const matchesStatus =
+        selectedStatus === "all" ||
+        (selectedStatus === "drifted" && p.is_drifted) ||
+        (selectedStatus === "unpinned" && !p.is_pinned && p.pkgbuild_path) ||
+        (selectedStatus === "synced" && !p.is_drifted && (p.is_pinned || !p.pkgbuild_path));
+      const matchesQuery =
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        p.path.toLowerCase().includes(query.toLowerCase()) ||
+        (p.manifest_id && p.manifest_id.toLowerCase().includes(query.toLowerCase()));
 
-    return matchesEco && matchesStatus && matchesQuery;
-  });
+      return matchesEco && matchesStatus && matchesQuery;
+    })
+    .sort((a, b) => (b.git_commit_timestamp || 0) - (a.git_commit_timestamp || 0));
 
   const driftedCount = projects.filter((p) => p.is_drifted).length;
 

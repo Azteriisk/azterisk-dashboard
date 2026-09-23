@@ -280,21 +280,21 @@ export default function TrackedPackagesManager({
         {packages.map((pkg) => (
           <div
             key={pkg}
-            className="flex items-center justify-between p-3 rounded-lg bg-[#282828] border border-[#3c3836] hover:border-[#504945] transition group"
+            className="flex items-center justify-between gap-3 p-3 rounded-lg bg-[#282828] border border-[#3c3836] hover:border-[#504945] transition group overflow-hidden"
           >
-            <div className="flex items-center space-x-3">
-              <div className="w-7 h-7 rounded-md bg-[#1d2021] border border-[#3c3836] flex items-center justify-center text-[#a89984] group-hover:text-[#fe8019] transition">
+            <div className="flex items-center space-x-3 min-w-0 flex-1">
+              <div className="w-7 h-7 rounded-md bg-[#1d2021] border border-[#3c3836] flex items-center justify-center text-[#a89984] group-hover:text-[#fe8019] transition shrink-0">
                 <Shield className="w-3.5 h-3.5" />
               </div>
-              <div>
-                <span className="font-mono text-xs font-semibold text-[#fbf1c7]">
+              <div className="min-w-0 flex-1">
+                <span className="font-mono text-xs font-semibold text-[#fbf1c7] truncate block" title={pkg}>
                   {pkg}
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <span className="text-[10px] uppercase font-mono font-medium px-2 py-0.5 rounded bg-[#b8bb26]/15 text-[#b8bb26] border border-[#b8bb26]/30">
+            <div className="flex items-center space-x-2 shrink-0">
+              <span className="text-[10px] uppercase font-mono font-medium px-2 py-0.5 rounded bg-[#b8bb26]/15 text-[#b8bb26] border border-[#b8bb26]/30 whitespace-nowrap">
                 Radar Active
               </span>
 
@@ -302,7 +302,7 @@ export default function TrackedPackagesManager({
                 <button
                   onClick={() => handleRemove(pkg)}
                   disabled={loading}
-                  className="text-[#928374] hover:text-[#fb4934] p-1.5 rounded-md hover:bg-[#fb4934]/15 transition cursor-pointer"
+                  className="text-[#928374] hover:text-[#fb4934] p-1.5 rounded-md hover:bg-[#fb4934]/15 transition cursor-pointer shrink-0"
                   title={`Remove ${pkg} from radar`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />

@@ -20,6 +20,9 @@ export interface Project {
   is_pinned: boolean;
   is_drifted: boolean;
   srcinfo_synchronized: boolean;
+  git_commit_date?: string | null;
+  git_commit_timestamp?: number | null;
+  git_commit_message?: string | null;
 }
 
 export interface Package {

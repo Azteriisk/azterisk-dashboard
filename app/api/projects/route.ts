@@ -34,6 +34,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Sort projects: most recent commits at the top
+    projects.sort((a, b) => {
+      const timeA = a.git_commit_timestamp || 0;
+      const timeB = b.git_commit_timestamp || 0;
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
     return NextResponse.json({
       total: projects.length,
       projects,

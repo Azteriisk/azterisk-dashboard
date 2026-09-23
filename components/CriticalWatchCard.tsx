@@ -13,7 +13,7 @@ export default function CriticalWatchCard({ watch }: CriticalWatchCardProps) {
 
   return (
     <div
-      className={`rounded-xl p-5 border transition-colors ${
+      className={`rounded-xl p-5 border transition-colors overflow-hidden ${
         isUpdateAvailable
           ? "bg-[#32302f] border-[#fabd2f]/50 hover:border-[#fabd2f]"
           : isUpToDate
@@ -21,10 +21,10 @@ export default function CriticalWatchCard({ watch }: CriticalWatchCardProps) {
           : "bg-[#32302f] border-[#fb4934]/50 hover:border-[#fb4934]"
       }`}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex items-center space-x-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center space-x-3 min-w-0 flex-1">
           <div
-            className={`w-10 h-10 rounded-lg border flex items-center justify-center ${
+            className={`w-10 h-10 rounded-lg border flex items-center justify-center shrink-0 ${
               isUpdateAvailable
                 ? "bg-[#fabd2f]/15 text-[#fabd2f] border-[#fabd2f]/30"
                 : isUpToDate
@@ -40,10 +40,12 @@ export default function CriticalWatchCard({ watch }: CriticalWatchCardProps) {
               <AlertTriangle className="w-5 h-5" />
             )}
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h3 className="font-bold text-[#fbf1c7] text-base tracking-tight">{watch.name}</h3>
-              <span className="text-[11px] px-2 py-0.5 rounded-md bg-[#282828] text-[#d5c4a1] border border-[#3c3836] font-mono">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <h3 className="font-bold text-[#fbf1c7] text-base tracking-tight break-words min-w-0" title={watch.name}>
+                {watch.name}
+              </h3>
+              <span className="text-[11px] px-2 py-0.5 rounded-md bg-[#282828] text-[#d5c4a1] border border-[#3c3836] font-mono shrink-0">
                 {watch.installed_version}
               </span>
             </div>
@@ -52,19 +54,19 @@ export default function CriticalWatchCard({ watch }: CriticalWatchCardProps) {
         </div>
 
         {/* Status Badge */}
-        <div>
+        <div className="shrink-0 pt-0.5">
           {isUpToDate ? (
-            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#b8bb26]/15 text-[#b8bb26] border border-[#b8bb26]/30">
+            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#b8bb26]/15 text-[#b8bb26] border border-[#b8bb26]/30 whitespace-nowrap">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Compatible</span>
             </span>
           ) : isUpdateAvailable ? (
-            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#fabd2f]/15 text-[#fabd2f] border border-[#fabd2f]/30">
+            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#fabd2f]/15 text-[#fabd2f] border border-[#fabd2f]/30 whitespace-nowrap">
               <ShieldAlert className="w-3.5 h-3.5" />
               <span>Update Ready</span>
             </span>
           ) : (
-            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#fb4934]/15 text-[#fb4934] border border-[#fb4934]/30">
+            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#fb4934]/15 text-[#fb4934] border border-[#fb4934]/30 whitespace-nowrap">
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>Attention</span>
             </span>
