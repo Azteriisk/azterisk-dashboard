@@ -13,6 +13,7 @@ import {
   Check,
   RefreshCw,
   Terminal,
+  Globe,
 } from "lucide-react";
 
 interface DependencyTableProps {
@@ -34,6 +35,7 @@ export default function DependencyTable({
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
 
   const [installingPkg, setInstallingPkg] = useState<string | null>(null);
+  const [installingGlobalPkg, setInstallingGlobalPkg] = useState<string | null>(null);
   const [installingAll, setInstallingAll] = useState(false);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
@@ -102,6 +104,33 @@ export default function DependencyTable({
     } finally {
       setInstallingPkg(null);
       setInstallingAll(false);
+      setTimeout(() => {
+        setFeedback((prev) => (prev?.type === "success" ? null : prev));
+      }, 6000);
+    }
+  };
+
+  const handleGlobalInstall = async (pkg: Package) => {
+    setInstallingGlobalPkg(pkg.name);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/dependencies/install-global", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ package_name: pkg.name, ecosystem: pkg.pkg_type }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedback({ type: "success", text: data.message || `Installed ${pkg.name} globally!` });
+        if (onRefresh) onRefresh();
+      } else {
+        if (data.command) handleCopy(data.command, pkg.name);
+        setFeedback({ type: "warn", text: data.message || "Manual install required — command copied!" });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err.message || "Global install failed." });
+    } finally {
+      setInstallingGlobalPkg(null);
       setTimeout(() => {
         setFeedback((prev) => (prev?.type === "success" ? null : prev));
       }, 6000);
@@ -347,10 +376,16 @@ export default function DependencyTable({
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center space-x-1.5">
+                        <div className="flex items-center space-x-2">
                           <span className="font-semibold text-[#ebdbb2]">
                             {pkg.required_by.length} project(s)
                           </span>
+                          {pkg.required_by.length >= 2 && (
+                            <span className="px-1.5 py-0.5 rounded bg-[#83a598]/15 border border-[#83a598]/30 text-[#83a598] font-mono text-[9px] flex items-center space-x-1 shrink-0">
+                              <Globe className="w-2.5 h-2.5" />
+                              <span>Shared</span>
+                            </span>
+                          )}
                           <span className="text-[10px] text-[#928374]">
                             {isExpanded ? "▲" : "▼"}
                           </span>
@@ -411,7 +446,24 @@ export default function DependencyTable({
                             </button>
                           </div>
                         ) : (
-                          <span className="text-[#7c6f64] font-mono text-[11px]">Ready</span>
+                          <div className="flex items-center justify-end space-x-2">
+                            {pkg.required_by.length >= 2 && (
+                              <button
+                                onClick={() => handleGlobalInstall(pkg)}
+                                disabled={installingGlobalPkg === pkg.name}
+                                className="px-2 py-0.5 rounded bg-[#282828] hover:bg-[#3c3836] border border-[#83a598]/40 text-[#83a598] hover:text-[#ebdbb2] font-mono text-[10px] flex items-center space-x-1 cursor-pointer transition disabled:opacity-50"
+                                title={`Install ${pkg.name} globally on host`}
+                              >
+                                {installingGlobalPkg === pkg.name ? (
+                                  <RefreshCw className="w-2.5 h-2.5 animate-spin text-[#83a598]" />
+                                ) : (
+                                  <Globe className="w-2.5 h-2.5" />
+                                )}
+                                <span>Install Global</span>
+                              </button>
+                            )}
+                            <span className="text-[#7c6f64] font-mono text-[11px]">Ready</span>
+                          </div>
                         )}
                       </td>
                     </tr>

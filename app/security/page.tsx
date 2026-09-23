@@ -13,10 +13,15 @@ import {
   Info,
   CheckCircle2,
   Search,
-  SlidersHorizontal,
-  ExternalLink,
   Layers,
   List,
+  Wrench,
+  Zap,
+  CheckSquare,
+  Square,
+  Eye,
+  EyeOff,
+  Check,
 } from "lucide-react";
 
 const SEVERITY_RANK: Record<string, number> = {
@@ -43,6 +48,17 @@ export default function SecurityPage() {
   const [selectedEcosystem, setSelectedEcosystem] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"grouped" | "individual">("grouped");
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Multi-select & Batch Remediation State
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [remediatedPackages, setRemediatedPackages] = useState<Set<string>>(new Set());
+  const [hideRemediated, setHideRemediated] = useState(false);
+  const [batchProcessing, setBatchProcessing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{
+    current: number;
+    total: number;
+    message: string;
+  } | null>(null);
 
   const fetchSecurityData = async () => {
     try {
@@ -81,6 +97,8 @@ export default function SecurityPage() {
       if (res.ok) {
         setVulnerabilities(data.vulnerabilities || []);
         if (data.summary) setSummary(data.summary);
+        setRemediatedPackages(new Set());
+        setSelectedKeys(new Set());
         setNotification("Security audit completed.");
       } else {
         setNotification(data.error || "Security scan failed.");
@@ -159,9 +177,188 @@ export default function SecurityPage() {
     return list;
   }, [filteredVulns]);
 
-  const bySev = summary.by_severity || {};
+  // Display lists taking into account hideRemediated toggle
+  const visibleGrouped = useMemo(() => {
+    if (!hideRemediated) return groupedVulns;
+    return groupedVulns.filter((g) => !remediatedPackages.has(g.package));
+  }, [groupedVulns, hideRemediated, remediatedPackages]);
+
+  const visibleIndividual = useMemo(() => {
+    if (!hideRemediated) return filteredVulns;
+    return filteredVulns.filter((v) => !remediatedPackages.has(v.package));
+  }, [filteredVulns, hideRemediated, remediatedPackages]);
+
+  // Compute live active severity counts excluding optimistically remediated items
+  const activeSeverityCounts = useMemo(() => {
+    const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, UNKNOWN: 0 };
+    for (const v of vulnerabilities) {
+      if (!remediatedPackages.has(v.package)) {
+        counts[v.severity] = (counts[v.severity] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [vulnerabilities, remediatedPackages]);
+
+  const totalActiveVulns = Object.values(activeSeverityCounts).reduce((a, b) => a + b, 0);
   const hasCriticalOrHigh =
-    (bySev.CRITICAL || 0) > 0 || (bySev.HIGH || 0) > 0;
+    (activeSeverityCounts.CRITICAL || 0) > 0 || (activeSeverityCounts.HIGH || 0) > 0;
+
+  // Multi-select helpers
+  const selectableKeys = useMemo(() => {
+    if (viewMode === "grouped") {
+      return visibleGrouped
+        .filter((g) => !remediatedPackages.has(g.package))
+        .map((g) => `${g.package}-${g.ecosystem}`);
+    } else {
+      return visibleIndividual
+        .filter((v) => !remediatedPackages.has(v.package))
+        .map((v) => `${v.id}-${v.package}`);
+    }
+  }, [viewMode, visibleGrouped, visibleIndividual, remediatedPackages]);
+
+  const isAllSelected =
+    selectableKeys.length > 0 && selectableKeys.every((k) => selectedKeys.has(k));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedKeys(new Set());
+    } else {
+      setSelectedKeys(new Set(selectableKeys));
+    }
+  };
+
+  const toggleItemSelect = (key: string, checked: boolean) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(key);
+      } else {
+        next.delete(key);
+      }
+      return next;
+    });
+  };
+
+  const handlePackageRemediated = (packageName: string) => {
+    setRemediatedPackages((prev) => new Set(prev).add(packageName));
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      for (const k of next) {
+        if (k.includes(packageName)) next.delete(k);
+      }
+      return next;
+    });
+    fetchSecurityData();
+  };
+
+  // Batch Remediation Execution
+  const runBatchRemediation = async (
+    items: Array<{
+      package_name: string;
+      affected_projects?: string[];
+      ecosystem: string;
+      fixed_version?: string | null;
+      command?: string | null;
+    }>
+  ) => {
+    if (items.length === 0) return;
+
+    setBatchProcessing(true);
+    setBatchProgress({
+      current: 0,
+      total: items.length,
+      message: `Initiating batch remediation for ${items.length} package(s)...`,
+    });
+
+    try {
+      const res = await fetch("/api/security/remediate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+
+      const data = await res.json();
+      if (data.results) {
+        const newlyRemediated = new Set(remediatedPackages);
+        for (const r of data.results) {
+          if (r.success) {
+            newlyRemediated.add(r.package_name);
+          }
+        }
+        setRemediatedPackages(newlyRemediated);
+        setSelectedKeys(new Set());
+        setNotification(
+          data.message ||
+            `Batch remediation finished: ${data.succeeded || 0} succeeded, ${data.failed || 0} failed.`
+        );
+      } else if (data.success) {
+        items.forEach((i) => setRemediatedPackages((prev) => new Set(prev).add(i.package_name)));
+        setSelectedKeys(new Set());
+        setNotification(data.message || "Successfully applied fixes.");
+      } else {
+        setNotification(data.message || data.error || "Batch remediation completed with issues.");
+      }
+
+      // Re-fetch fresh security audit from server
+      await fetchSecurityData();
+    } catch (err: any) {
+      setNotification(`Batch remediation failed: ${err.message}`);
+    } finally {
+      setBatchProcessing(false);
+      setBatchProgress(null);
+    }
+  };
+
+  const handleApplySelected = () => {
+    if (viewMode === "grouped") {
+      const itemsToFix = groupedVulns
+        .filter((g) => selectedKeys.has(`${g.package}-${g.ecosystem}`) && !remediatedPackages.has(g.package))
+        .map((g) => ({
+          package_name: g.package,
+          affected_projects: g.affected_projects,
+          ecosystem: g.ecosystem,
+          fixed_version: g.fixed_version,
+          command: g.remediation?.includes(": ") ? g.remediation.split(": ").slice(1).join(": ").trim() : g.remediation,
+        }));
+      runBatchRemediation(itemsToFix);
+    } else {
+      const itemsToFix = filteredVulns
+        .filter((v) => selectedKeys.has(`${v.id}-${v.package}`) && !remediatedPackages.has(v.package))
+        .map((v) => ({
+          package_name: v.package,
+          affected_projects: v.affected_projects,
+          ecosystem: v.ecosystem,
+          fixed_version: v.fixed_version,
+          command: v.remediation?.includes(": ") ? v.remediation.split(": ").slice(1).join(": ").trim() : v.remediation,
+        }));
+      runBatchRemediation(itemsToFix);
+    }
+  };
+
+  const handleApplyAll = () => {
+    // In grouped mode or individual mode, apply fixes to all visible un-remediated packages
+    const itemsToFix = groupedVulns
+      .filter((g) => !remediatedPackages.has(g.package))
+      .map((g) => ({
+        package_name: g.package,
+        affected_projects: g.affected_projects,
+        ecosystem: g.ecosystem,
+        fixed_version: g.fixed_version,
+        command: g.remediation?.includes(": ") ? g.remediation.split(": ").slice(1).join(": ").trim() : g.remediation,
+      }));
+
+    if (
+      window.confirm(
+        `Are you sure you want to apply updates across all ${itemsToFix.length} vulnerable package(s) in their respective workspace projects?`
+      )
+    ) {
+      runBatchRemediation(itemsToFix);
+    }
+  };
+
+  const unremediatedCount = selectableKeys.length;
+  const selectedCount = selectedKeys.size;
+  const remediatedCount = remediatedPackages.size;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
@@ -174,10 +371,10 @@ export default function SecurityPage() {
             ) : (
               <ShieldCheck className="w-3.5 h-3.5 text-[#b8bb26]" />
             )}
-            <span>Security & Advisory Audit</span>
+            <span>Security &amp; Advisory Audit</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-[#fbf1c7] tracking-tight">
-            Security & Advisory Radar
+            Security &amp; Advisory Radar
           </h1>
           <p className="text-xs sm:text-sm text-[#a89984] max-w-2xl leading-relaxed">
             Vulnerability auditing across your tracked projects and dependencies.
@@ -191,7 +388,7 @@ export default function SecurityPage() {
         {isLocal && (
           <button
             onClick={handleScan}
-            disabled={scanning}
+            disabled={scanning || batchProcessing}
             className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-[#d65d0e] hover:bg-[#fe8019] disabled:opacity-50 text-[#fbf1c7] font-semibold text-xs transition cursor-pointer w-fit shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${scanning ? "animate-spin" : ""}`} />
@@ -200,20 +397,23 @@ export default function SecurityPage() {
         )}
       </div>
 
-      {/* Notification */}
+      {/* Notification Toast */}
       {notification && (
-        <div className="p-3 rounded-lg bg-[#3c3836] border border-[#504945] text-xs text-[#ebdbb2] flex items-center justify-between">
-          <span>{notification}</span>
+        <div className="p-3.5 rounded-xl bg-[#32302f] border border-[#504945] text-xs text-[#ebdbb2] flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-2.5">
+            <CheckCircle2 className="w-4 h-4 text-[#b8bb26] shrink-0" />
+            <span>{notification}</span>
+          </div>
           <button
             onClick={() => setNotification(null)}
-            className="text-[#a89984] hover:text-[#fbf1c7] text-xs ml-4 cursor-pointer"
+            className="text-[#a89984] hover:text-[#fbf1c7] text-xs font-mono ml-4 cursor-pointer"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Severity Breakdown Cards */}
+      {/* Severity Breakdown Cards (Live Decremented as Remediated) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5">
           <div className="flex items-center justify-between">
@@ -221,9 +421,9 @@ export default function SecurityPage() {
             <AlertOctagon className="w-4 h-4 text-[#fb4934]" />
           </div>
           <div className="mt-2 text-2xl font-bold text-[#fb4934] font-mono">
-            {bySev.CRITICAL || 0}
+            {activeSeverityCounts.CRITICAL || 0}
           </div>
-          <span className="text-[11px] text-[#928374] mt-1 block">Immediate action</span>
+          <span className="text-[11px] text-[#928374] mt-1 block">Immediate action required</span>
         </div>
 
         <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5">
@@ -232,9 +432,9 @@ export default function SecurityPage() {
             <ShieldAlert className="w-4 h-4 text-[#fe8019]" />
           </div>
           <div className="mt-2 text-2xl font-bold text-[#fe8019] font-mono">
-            {bySev.HIGH || 0}
+            {activeSeverityCounts.HIGH || 0}
           </div>
-          <span className="text-[11px] text-[#928374] mt-1 block">Patch recommended</span>
+          <span className="text-[11px] text-[#928374] mt-1 block">High risk CVEs</span>
         </div>
 
         <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5">
@@ -243,7 +443,7 @@ export default function SecurityPage() {
             <AlertTriangle className="w-4 h-4 text-[#fabd2f]" />
           </div>
           <div className="mt-2 text-2xl font-bold text-[#fabd2f] font-mono">
-            {bySev.MEDIUM || 0}
+            {activeSeverityCounts.MEDIUM || 0}
           </div>
           <span className="text-[11px] text-[#928374] mt-1 block">Moderate risk</span>
         </div>
@@ -254,11 +454,99 @@ export default function SecurityPage() {
             <Info className="w-4 h-4 text-[#83a598]" />
           </div>
           <div className="mt-2 text-2xl font-bold text-[#83a598] font-mono">
-            {bySev.LOW || 0}
+            {activeSeverityCounts.LOW || 0}
           </div>
           <span className="text-[11px] text-[#928374] mt-1 block">Minor severity</span>
         </div>
       </div>
+
+      {/* Batch Remediation Action Toolbar */}
+      {isLocal && unremediatedCount > 0 && (
+        <div className="p-4 rounded-xl border border-[#fe8019]/40 bg-[#32302f] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={toggleSelectAll}
+              disabled={batchProcessing}
+              className="inline-flex items-center space-x-2 text-xs font-mono text-[#ebdbb2] hover:text-[#fbf1c7] cursor-pointer"
+            >
+              {isAllSelected ? (
+                <CheckSquare className="w-4 h-4 text-[#fe8019]" />
+              ) : (
+                <Square className="w-4 h-4 text-[#7c6f64]" />
+              )}
+              <span>
+                {isAllSelected ? "Deselect All" : `Select All (${unremediatedCount})`}
+              </span>
+            </button>
+
+            <span className="text-[#504945]">•</span>
+
+            <span className="text-xs font-mono text-[#a89984]">
+              <strong className="text-[#fbf1c7]">{selectedCount}</strong> selected
+            </span>
+
+            {remediatedCount > 0 && (
+              <>
+                <span className="text-[#504945]">•</span>
+                <button
+                  onClick={() => setHideRemediated(!hideRemediated)}
+                  className="inline-flex items-center space-x-1.5 text-xs font-mono text-[#83a598] hover:text-[#fbf1c7] cursor-pointer"
+                >
+                  {hideRemediated ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  <span>{hideRemediated ? "Show Remediated" : `Hide Remediated (${remediatedCount})`}</span>
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-2.5 shrink-0">
+            {/* Apply Selected Button */}
+            <button
+              onClick={handleApplySelected}
+              disabled={selectedCount === 0 || batchProcessing}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-[#fe8019] hover:bg-[#fe8019]/90 disabled:opacity-40 disabled:cursor-not-allowed text-[#1d2021] font-mono font-bold text-xs transition cursor-pointer"
+              title="Apply fix to all checked packages"
+            >
+              {batchProcessing ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Wrench className="w-3.5 h-3.5" />
+              )}
+              <span>Apply Fix to Selected ({selectedCount})</span>
+            </button>
+
+            {/* Apply All Button */}
+            <button
+              onClick={handleApplyAll}
+              disabled={unremediatedCount === 0 || batchProcessing}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-[#fabd2f] hover:bg-[#fabd2f]/90 disabled:opacity-40 disabled:cursor-not-allowed text-[#1d2021] font-mono font-bold text-xs transition cursor-pointer"
+              title="Apply updates to all vulnerable packages across all projects"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Apply All ({unremediatedCount})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Processing Progress Banner */}
+      {batchProcessing && (
+        <div className="p-4 rounded-xl border border-[#fe8019] bg-[#282828] space-y-2 animate-pulse">
+          <div className="flex items-center justify-between text-xs font-mono">
+            <span className="flex items-center space-x-2 text-[#fe8019]">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <strong className="font-semibold">Executing batch remediation across workspaces...</strong>
+            </span>
+            <span className="text-[#a89984]">Please wait</span>
+          </div>
+          <div className="w-full bg-[#1d2021] h-2 rounded-full overflow-hidden border border-[#3c3836]">
+            <div className="h-full bg-linear-to-r from-[#fe8019] to-[#b8bb26] w-full animate-indeterminate" />
+          </div>
+          <p className="text-[11px] font-mono text-[#a89984]">
+            Updating project manifests, executing package managers, and synchronizing security audit.
+          </p>
+        </div>
+      )}
 
       {/* Filters, View Toggle & Search */}
       <div className="space-y-3">
@@ -337,25 +625,41 @@ export default function SecurityPage() {
             <span>Auditing security advisories...</span>
           </div>
         ) : viewMode === "grouped" ? (
-          groupedVulns.length > 0 ? (
-            groupedVulns.map((group) => (
-              <GroupedVulnerabilityCard
-                key={`${group.package}-${group.ecosystem}`}
-                group={group}
-                onRemediated={fetchSecurityData}
-              />
-            ))
+          visibleGrouped.length > 0 ? (
+            visibleGrouped.map((group) => {
+              const key = `${group.package}-${group.ecosystem}`;
+              const isRemediated = remediatedPackages.has(group.package);
+              return (
+                <GroupedVulnerabilityCard
+                  key={key}
+                  group={group}
+                  selected={selectedKeys.has(key)}
+                  onToggleSelect={(checked) => toggleItemSelect(key, checked)}
+                  isRemediated={isRemediated}
+                  onRemediated={handlePackageRemediated}
+                  disabled={batchProcessing}
+                />
+              );
+            })
           ) : (
             <CleanStateCard />
           )
-        ) : filteredVulns.length > 0 ? (
-          filteredVulns.map((vuln) => (
-            <VulnerabilityCard
-              key={`${vuln.id}-${vuln.package}`}
-              vuln={vuln}
-              onRemediated={fetchSecurityData}
-            />
-          ))
+        ) : visibleIndividual.length > 0 ? (
+          visibleIndividual.map((vuln) => {
+            const key = `${vuln.id}-${vuln.package}`;
+            const isRemediated = remediatedPackages.has(vuln.package);
+            return (
+              <VulnerabilityCard
+                key={key}
+                vuln={vuln}
+                selected={selectedKeys.has(key)}
+                onToggleSelect={(checked) => toggleItemSelect(key, checked)}
+                isRemediated={isRemediated}
+                onRemediated={handlePackageRemediated}
+                disabled={batchProcessing}
+              />
+            );
+          })
         ) : (
           <CleanStateCard />
         )}
