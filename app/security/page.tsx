@@ -245,15 +245,25 @@ export default function SecurityPage() {
   const hasCriticalOrHigh =
     (activePackageCounts.CRITICAL || 0) > 0 || (activePackageCounts.HIGH || 0) > 0;
 
+  const hasActionableFix = (fixed_version?: string | null, remediation?: string | null) => {
+    return (
+      Boolean(fixed_version) ||
+      (Boolean(remediation) &&
+        /^(bun|npm|pnpm|yarn|cargo|pip|pip3|go|paru|pacman)\b/.test(
+          remediation.replace(/^[^:]+:\s*/, "")
+        ))
+    );
+  };
+
   // Multi-select helpers
   const selectableKeys = useMemo(() => {
     if (viewMode === "grouped") {
       return visibleGrouped
-        .filter((g) => !remediatedPackages.has(g.package))
+        .filter((g) => !remediatedPackages.has(g.package) && hasActionableFix(g.fixed_version, g.remediation))
         .map((g) => `${g.package}-${g.ecosystem}`);
     } else {
       return visibleIndividual
-        .filter((v) => !remediatedPackages.has(v.package))
+        .filter((v) => !remediatedPackages.has(v.package) && hasActionableFix(v.fixed_version, v.remediation))
         .map((v) => `${v.id}-${v.package}`);
     }
   }, [viewMode, visibleGrouped, visibleIndividual, remediatedPackages]);
@@ -382,7 +392,7 @@ export default function SecurityPage() {
 
   const handleApplyAll = () => {
     const itemsToFix = allGroupedVulns
-      .filter((g) => !remediatedPackages.has(g.package))
+      .filter((g) => !remediatedPackages.has(g.package) && hasActionableFix(g.fixed_version, g.remediation))
       .map((g) => ({
         package_name: g.package,
         affected_projects: g.affected_projects,
@@ -391,9 +401,14 @@ export default function SecurityPage() {
         command: g.remediation?.includes(": ") ? g.remediation.split(": ").slice(1).join(": ").trim() : g.remediation,
       }));
 
+    const noFixCount = allGroupedVulns.filter(
+      (g) => !remediatedPackages.has(g.package) && !hasActionableFix(g.fixed_version, g.remediation)
+    ).length;
+    const note = noFixCount > 0 ? ` (${noFixCount} package(s) have no upstream fix available yet and will be skipped)` : "";
+
     if (
       window.confirm(
-        `Are you sure you want to apply updates across all ${itemsToFix.length} vulnerable package(s) in their respective workspace projects?`
+        `Apply updates across all ${itemsToFix.length} fixable package(s) in their respective workspace projects?${note}`
       )
     ) {
       runBatchRemediation(itemsToFix);

@@ -192,61 +192,74 @@ async function remediateSingleItem(
     // 2. Node.js / npm Ecosystem
     // -------------------------------------------------------------
     else if (ecosystem === "npm" || ecosystem === "node") {
+      const cleanFixed = fixedVersion ? fixedVersion.replace(/^[\^~>=v\s]+/, "") : "";
+      const pkgJsonFile = path.join(projectDir, "package.json");
+
+      // 1. Update package.json manifest directly
+      try {
+        const content = await fs.readFile(pkgJsonFile, "utf-8");
+        const pkgJson = JSON.parse(content);
+        let modified = false;
+
+        if (pkgJson.dependencies?.[packageName]) {
+          pkgJson.dependencies[packageName] = cleanFixed ? `^${cleanFixed}` : "latest";
+          modified = true;
+        }
+        if (pkgJson.devDependencies?.[packageName]) {
+          pkgJson.devDependencies[packageName] = cleanFixed ? `^${cleanFixed}` : "latest";
+          modified = true;
+        }
+
+        if (modified) {
+          await fs.writeFile(pkgJsonFile, JSON.stringify(pkgJson, null, 2) + "\n", "utf-8");
+          projManifestUpdated = true;
+          updatedManifestAny = true;
+        }
+      } catch {
+        // package.json might not exist or be invalid JSON
+      }
+
+      // 2. Install / resolve via Bun or npm
       const hasBun = await isCommandAvailable("bun");
       const hasNpm = await isCommandAvailable("npm");
 
-      let nodeCmd = hasBun ? `bun update ${packageName}` : hasNpm ? `npm update ${packageName}` : "";
+      let nodeCmd = "";
+      if (hasBun) {
+        nodeCmd = cleanFixed ? `bun add ${packageName}@^${cleanFixed}` : `bun update ${packageName}`;
+      } else if (hasNpm) {
+        nodeCmd = cleanFixed ? `npm install ${packageName}@^${cleanFixed}` : `npm update ${packageName}`;
+      }
 
       if (nodeCmd) {
         try {
-          await execAsync(nodeCmd, { cwd: projectDir, timeout: 45000 });
+          await execAsync(nodeCmd, { cwd: projectDir, timeout: 60000 });
           executedCommands.push(`${nodeCmd} (${projName})`);
           projectsUpdated.push(projName);
         } catch (err: any) {
-          // If bun failed, try npm
-          if (hasBun && hasNpm) {
+          // If bun add failed (e.g. lockfile or peer dep issue), fallback to bun install if manifest was updated
+          if (hasBun && projManifestUpdated) {
             try {
-              nodeCmd = `npm update ${packageName}`;
-              await execAsync(nodeCmd, { cwd: projectDir, timeout: 45000 });
-              executedCommands.push(`${nodeCmd} (${projName})`);
+              await execAsync("bun install", { cwd: projectDir, timeout: 60000 });
+              executedCommands.push(`bun install [package.json updated to ^${cleanFixed}] (${projName})`);
               projectsUpdated.push(projName);
-            } catch (fallbackErr: any) {
-              hadAnyFailure = true;
-              lastErrorMessage = fallbackErr.stderr || fallbackErr.message || `Update failed in ${projName}`;
+            } catch {
+              executedCommands.push(`package.json updated to ^${cleanFixed} (${projName})`);
+              projectsUpdated.push(projName);
             }
+          } else if (projManifestUpdated) {
+            executedCommands.push(`package.json updated to ^${cleanFixed} (${projName})`);
+            projectsUpdated.push(projName);
           } else {
             hadAnyFailure = true;
             lastErrorMessage = err.stderr || err.message || `Update failed in ${projName}`;
           }
         }
+      } else if (projManifestUpdated) {
+        executedCommands.push(`package.json updated to ^${cleanFixed} [Node PM not installed] (${projName})`);
+        projectsUpdated.push(projName);
       } else {
-        // Direct package.json pinning fallback
-        const pkgJsonFile = path.join(projectDir, "package.json");
-        try {
-          const content = await fs.readFile(pkgJsonFile, "utf-8");
-          const pkgJson = JSON.parse(content);
-          let modified = false;
-
-          if (pkgJson.dependencies?.[packageName]) {
-            pkgJson.dependencies[packageName] = fixedVersion ? `^${fixedVersion}` : "latest";
-            modified = true;
-          }
-          if (pkgJson.devDependencies?.[packageName]) {
-            pkgJson.devDependencies[packageName] = fixedVersion ? `^${fixedVersion}` : "latest";
-            modified = true;
-          }
-
-          if (modified) {
-            await fs.writeFile(pkgJsonFile, JSON.stringify(pkgJson, null, 2) + "\n", "utf-8");
-            projManifestUpdated = true;
-            updatedManifestAny = true;
-            executedCommands.push(`package.json updated to ^${fixedVersion} (${projName})`);
-            projectsUpdated.push(projName);
-          }
-        } catch {
-          hadAnyFailure = true;
-          lastErrorMessage = `No Node package manager (bun/npm) found and package.json could not be modified.`;
-        }
+        hadAnyFailure = true;
+        lastErrorMessage = `No Node package manager (bun/npm) found and package.json could not be modified.`;
       }
     }
 
@@ -254,69 +267,74 @@ async function remediateSingleItem(
     // 3. Rust / Cargo Ecosystem
     // -------------------------------------------------------------
     else if (ecosystem === "cargo" || ecosystem === "rust") {
-      const hasCargo = await isCommandAvailable("cargo");
-
-      if (hasCargo) {
-        let cargoCmd = `cargo update -p ${packageName}`;
-        try {
-          await execAsync(cargoCmd, { cwd: projectDir, timeout: 45000 });
-          executedCommands.push(`${cargoCmd} (${projName})`);
-          projectsUpdated.push(projName);
-        } catch (err: any) {
-          // If error is ambiguous (e.g. rand), try specifying installed version
-          const installedVer = item.installed_version;
-          if (installedVer) {
-            const specificCmd = `cargo update -p ${packageName}@${installedVer}`;
-            try {
-              await execAsync(specificCmd, { cwd: projectDir, timeout: 45000 });
-              executedCommands.push(`${specificCmd} (${projName})`);
-              projectsUpdated.push(projName);
-            } catch (err2: any) {
-              hadAnyFailure = true;
-              lastErrorMessage = err2.stderr || err2.message || `cargo update failed in ${projName}`;
-            }
-          } else {
-            hadAnyFailure = true;
-            lastErrorMessage = err.stderr || err.message || `cargo update failed in ${projName}`;
-          }
-        }
+      if (!fixedVersion) {
+        hadAnyFailure = true;
+        lastErrorMessage = `No upstream patch or fixed version released yet for ${packageName}.`;
       } else {
-        // Direct Cargo.toml pinning fallback when Cargo CLI is not installed
-        const cargoTomlFile = path.join(projectDir, "Cargo.toml");
-        try {
-          const content = await fs.readFile(cargoTomlFile, "utf-8");
-          const lines = content.split("\n");
-          let modified = false;
-          const cleanFixed = fixedVersion.replace(/^v/, "");
+        const hasCargo = await isCommandAvailable("cargo");
 
-          const updatedLines = lines.map((line) => {
-            const trimmed = line.trim();
-            if (trimmed.startsWith(`${packageName} =`) || trimmed.startsWith(`${packageName}=`)) {
-              modified = true;
-              if (cleanFixed) {
-                if (line.includes(`version = "`)) {
-                  return line.replace(/version\s*=\s*"[^"]+"/, `version = ">=${cleanFixed}"`);
-                } else {
-                  return line.replace(/=\s*"[^"]+"/, `= ">=${cleanFixed}"`);
+        if (hasCargo) {
+          let cargoCmd = `cargo update -p ${packageName}`;
+          try {
+            await execAsync(cargoCmd, { cwd: projectDir, timeout: 45000 });
+            executedCommands.push(`${cargoCmd} (${projName})`);
+            projectsUpdated.push(projName);
+          } catch (err: any) {
+            // If error is ambiguous (e.g. rand), try specifying installed version
+            const installedVer = item.installed_version;
+            if (installedVer) {
+              const specificCmd = `cargo update -p ${packageName}@${installedVer}`;
+              try {
+                await execAsync(specificCmd, { cwd: projectDir, timeout: 45000 });
+                executedCommands.push(`${specificCmd} (${projName})`);
+                projectsUpdated.push(projName);
+              } catch (err2: any) {
+                hadAnyFailure = true;
+                lastErrorMessage = err2.stderr || err2.message || `cargo update failed in ${projName}`;
+              }
+            } else {
+              hadAnyFailure = true;
+              lastErrorMessage = err.stderr || err.message || `cargo update failed in ${projName}`;
+            }
+          }
+        } else {
+          // Direct Cargo.toml pinning fallback when Cargo CLI is not installed
+          const cargoTomlFile = path.join(projectDir, "Cargo.toml");
+          try {
+            const content = await fs.readFile(cargoTomlFile, "utf-8");
+            const lines = content.split("\n");
+            let modified = false;
+            const cleanFixed = fixedVersion.replace(/^v/, "");
+
+            const updatedLines = lines.map((line) => {
+              const trimmed = line.trim();
+              if (trimmed.startsWith(`${packageName} =`) || trimmed.startsWith(`${packageName}=`)) {
+                modified = true;
+                if (cleanFixed) {
+                  if (line.includes(`version = "`)) {
+                    return line.replace(/version\s*=\s*"[^"]+"/, `version = ">=${cleanFixed}"`);
+                  } else {
+                    return line.replace(/=\s*"[^"]+"/, `= ">=${cleanFixed}"`);
+                  }
                 }
               }
-            }
-            return line;
-          });
+              return line;
+            });
 
-          if (modified) {
-            await fs.writeFile(cargoTomlFile, updatedLines.join("\n"), "utf-8");
-            projManifestUpdated = true;
-            updatedManifestAny = true;
-            executedCommands.push(`Cargo.toml pinned to >=${cleanFixed} [Cargo CLI not installed on host] (${projName})`);
-            projectsUpdated.push(projName);
-          } else {
+            if (modified) {
+              await fs.writeFile(cargoTomlFile, updatedLines.join("\n"), "utf-8");
+              projManifestUpdated = true;
+              updatedManifestAny = true;
+              executedCommands.push(`Cargo.toml pinned to >=${cleanFixed} [Cargo CLI not installed on host] (${projName})`);
+              projectsUpdated.push(projName);
+            } else {
+              hadAnyFailure = true;
+              lastErrorMessage = `Cargo CLI is not installed on host ('sudo pacman -S rust' recommended).`;
+            }
+          } catch {
             hadAnyFailure = true;
             lastErrorMessage = `Cargo CLI is not installed on host ('sudo pacman -S rust' recommended).`;
           }
-        } catch {
-          hadAnyFailure = true;
-          lastErrorMessage = `Cargo CLI is not installed on host ('sudo pacman -S rust' recommended).`;
         }
       }
     }
@@ -387,7 +405,7 @@ async function remediateSingleItem(
     // -------------------------------------------------------------
     // 5. Fallback or Custom Command
     // -------------------------------------------------------------
-    else if (customCommand) {
+    else if (customCommand && /^(bun|npm|pnpm|yarn|cargo|pip|pip3|go|paru|pacman)\b/.test(customCommand)) {
       try {
         await execAsync(customCommand, { cwd: projectDir, timeout: 45000 });
         executedCommands.push(`${customCommand} (${projName})`);
@@ -396,6 +414,9 @@ async function remediateSingleItem(
         hadAnyFailure = true;
         lastErrorMessage = err.stderr || err.message || `Custom command failed in ${projName}`;
       }
+    } else if (!fixedVersion) {
+      hadAnyFailure = true;
+      lastErrorMessage = `No upstream patch or fixed version released yet for ${packageName}.`;
     }
   }
 

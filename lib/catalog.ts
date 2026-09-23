@@ -193,7 +193,7 @@ export async function triggerSecurityScan(): Promise<{
   }
 
   try {
-    const { stdout, stderr } = await execAsync("azterisk-catalog security --json");
+    const { stdout, stderr } = await execAsync("azterisk-catalog security --rescan --json");
     const parsed = JSON.parse(stdout);
     return {
       success: true,
