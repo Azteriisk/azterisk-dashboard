@@ -1,0 +1,14 @@
+{
+  "indexed_directories": [
+    "/home/azterisk/Projects",
+    "/home/azterisk/code"
+  ],
+  "critical_watch_packages": [
+    "omarchy",
+    "hyprland",
+    "quickshell",
+    "linux-wallpaperengine-git"
+  ],
+  "staleness_threshold_days": 30,
+  "auto_scan": true
+}
