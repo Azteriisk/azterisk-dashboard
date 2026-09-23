@@ -48,12 +48,37 @@ export interface CriticalWatch {
   is_critical: boolean;
 }
 
+export interface Vulnerability {
+  id: string;
+  package: string;
+  ecosystem: string;
+  installed_version?: string | null;
+  fixed_version?: string | null;
+  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+  title: string;
+  description: string;
+  affected_projects: string[];
+  remediation: string;
+  advisory_url?: string;
+  aliases: string[];
+}
+
+export interface SecuritySummary {
+  total_vulnerabilities: number;
+  by_severity: Record<string, number>;
+  affected_packages_count: number;
+  affected_projects_count: number;
+  scanned_at?: string;
+}
+
 export interface CatalogData {
   version: number;
   updated_at: string;
   projects: Record<string, Project>;
   packages: Record<string, Package>;
   profiles: Record<string, any>;
+  vulnerabilities?: Vulnerability[];
+  security_summary?: SecuritySummary;
 }
 
 export interface CatalogConfig {

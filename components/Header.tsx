@@ -12,6 +12,7 @@ import {
   Server,
   Cloud,
   CheckCircle,
+  ShieldCheck,
 } from "lucide-react";
 
 export default function Header() {
@@ -53,7 +54,8 @@ export default function Header() {
     { href: "/", label: "Overview", icon: Layers },
     { href: "/projects", label: "Projects", icon: FolderGit2 },
     { href: "/dependencies", label: "Dependencies", icon: Package },
-    { href: "/settings", label: "Directories", icon: Settings },
+    { href: "/security", label: "Security", icon: ShieldCheck },
+    { href: "/settings", label: "Settings", icon: Settings },
   ];
 
   return (

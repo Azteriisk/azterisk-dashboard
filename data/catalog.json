@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-09-23T03:20:01.548459+00:00",
+  "updated_at": "2026-09-23T03:27:04.596997+00:00",
   "projects": {
     "Blazor-.NET-Test": {
       "name": "Blazor-.NET-Test",
@@ -965,7 +965,7 @@
       "manifest_id": null,
       "manifest_version": null,
       "manifest_kinds": [],
-      "pkgname": "omarchy-catalog-git",
+      "pkgname": "azterisk-catalog-git",
       "pkgver": "1.0.0",
       "pkgbuild_path": "/home/azterisk/Projects/azterisk-catalog/PKGBUILD",
       "srcinfo_path": null,
@@ -978,7 +978,7 @@
       ],
       "optdepends": [],
       "commit_pin": null,
-      "git_head": "97c87192c9070792bd1e3b00ec8e095fc2e0dc88",
+      "git_head": "933d189dd62a98f3775a60a78143c74540759025",
       "git_branch": "master",
       "git_dirty": true,
       "is_pinned": false,
@@ -1016,9 +1016,9 @@
       ],
       "optdepends": [],
       "commit_pin": null,
-      "git_head": "9218618bc6584ffae83b8ea0cb7caa6c8b9be241",
+      "git_head": "b45d8c7ef5bf8c10cdfba0802a70eea9b2988767",
       "git_branch": "main",
-      "git_dirty": true,
+      "git_dirty": false,
       "is_pinned": false,
       "is_drifted": false,
       "srcinfo_synchronized": false
@@ -5643,5 +5643,7 @@
         "sbctl"
       ]
     }
-  }
+  },
+  "vulnerabilities": [],
+  "security_summary": {}
 }

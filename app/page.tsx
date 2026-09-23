@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCatalogData, computeWorkspaceStats } from "@/lib/catalog";
+import { getCatalogData, computeWorkspaceStats, getSecurityData } from "@/lib/catalog";
 import { getCriticalWatchList } from "@/lib/updates-checker";
 import CriticalWatchCard from "@/components/CriticalWatchCard";
 import {
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ArrowRight,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Layers,
   Sliders,
@@ -21,6 +22,8 @@ export default async function DashboardPage() {
   const catalog = await getCatalogData();
   const stats = await computeWorkspaceStats(catalog);
   const criticalWatch = await getCriticalWatchList(catalog);
+  const security = await getSecurityData();
+  const vulnCount = security.summary.total_vulnerabilities;
 
   return (
     <div className="space-y-8">
@@ -105,7 +108,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Link
           href="/projects"
           className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition block group"
@@ -154,6 +157,26 @@ export default async function DashboardPage() {
           </div>
           <span className="text-[11px] text-gray-500 mt-1 block">Uninstalled dependencies</span>
         </div>
+
+        <Link
+          href="/security"
+          className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition block group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-gray-400">Security Advisories</span>
+            {vulnCount > 0 ? (
+              <ShieldAlert className="w-4 h-4 text-red-400 group-hover:translate-x-0.5 transition" />
+            ) : (
+              <ShieldCheck className="w-4 h-4 text-emerald-400 group-hover:translate-x-0.5 transition" />
+            )}
+          </div>
+          <div className={`mt-2 text-2xl font-bold font-mono ${vulnCount > 0 ? "text-red-400" : "text-emerald-400"}`}>
+            {vulnCount}
+          </div>
+          <span className="text-[11px] text-gray-500 mt-1 block">
+            {vulnCount > 0 ? "Action required" : "0 reported CVEs"}
+          </span>
+        </Link>
       </div>
 
       {/* Ecosystem Distribution Bar */}

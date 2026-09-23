@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { CatalogData, CatalogConfig, WorkspaceStats } from "./types";
+import { CatalogData, CatalogConfig, WorkspaceStats, Vulnerability, SecuritySummary } from "./types";
 
 const execAsync = promisify(exec);
 
@@ -154,5 +154,57 @@ export async function triggerSync(projectName?: string): Promise<{ success: bool
     return { success: true, message: stdout.trim() || stderr.trim() };
   } catch (err: any) {
     return { success: false, message: err.message || "Sync failed" };
+  }
+}
+
+export async function getSecurityData(): Promise<{
+  vulnerabilities: Vulnerability[];
+  summary: SecuritySummary;
+  is_local: boolean;
+}> {
+  const catalog = await getCatalogData();
+  const vulnerabilities = catalog.vulnerabilities || [];
+  const summary: SecuritySummary = catalog.security_summary || {
+    total_vulnerabilities: vulnerabilities.length,
+    by_severity: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, UNKNOWN: 0 },
+    affected_packages_count: 0,
+    affected_projects_count: 0,
+    scanned_at: catalog.updated_at,
+  };
+
+  return {
+    vulnerabilities,
+    summary,
+    is_local: isLocalEnvironment(),
+  };
+}
+
+export async function triggerSecurityScan(): Promise<{
+  success: boolean;
+  message: string;
+  vulnerabilities?: Vulnerability[];
+  summary?: SecuritySummary;
+}> {
+  if (!isLocalEnvironment()) {
+    return {
+      success: false,
+      message: "Security scanning is only available in local Linux environment.",
+    };
+  }
+
+  try {
+    const { stdout, stderr } = await execAsync("azterisk-catalog security --json");
+    const parsed = JSON.parse(stdout);
+    return {
+      success: true,
+      message: "Security scan complete.",
+      vulnerabilities: parsed.vulnerabilities,
+      summary: parsed.summary,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "Security scan failed",
+    };
   }
 }
