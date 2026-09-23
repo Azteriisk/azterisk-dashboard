@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Vulnerability, SecuritySummary } from "@/lib/types";
 import VulnerabilityCard from "@/components/VulnerabilityCard";
+import GroupedVulnerabilityCard, { GroupedPackageVulnerability } from "@/components/GroupedVulnerabilityCard";
 import {
   ShieldCheck,
   ShieldAlert,
@@ -14,7 +15,17 @@ import {
   Search,
   SlidersHorizontal,
   ExternalLink,
+  Layers,
+  List,
 } from "lucide-react";
+
+const SEVERITY_RANK: Record<string, number> = {
+  CRITICAL: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+  UNKNOWN: 4,
+};
 
 export default function SecurityPage() {
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
@@ -30,6 +41,7 @@ export default function SecurityPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSeverity, setSelectedSeverity] = useState<string>("ALL");
   const [selectedEcosystem, setSelectedEcosystem] = useState<string>("ALL");
+  const [viewMode, setViewMode] = useState<"grouped" | "individual">("grouped");
   const [notification, setNotification] = useState<string | null>(null);
 
   const fetchSecurityData = async () => {
@@ -80,21 +92,72 @@ export default function SecurityPage() {
     }
   };
 
-  const filteredVulns = vulnerabilities.filter((v) => {
-    const matchesSearch =
-      v.package.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v.title && v.title.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredVulns = useMemo(() => {
+    return vulnerabilities.filter((v) => {
+      const matchesSearch =
+        v.package.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v.title && v.title.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesSeverity =
-      selectedSeverity === "ALL" || v.severity === selectedSeverity;
+      const matchesSeverity =
+        selectedSeverity === "ALL" || v.severity === selectedSeverity;
 
-    const matchesEcosystem =
-      selectedEcosystem === "ALL" ||
-      v.ecosystem.toLowerCase() === selectedEcosystem.toLowerCase();
+      const matchesEcosystem =
+        selectedEcosystem === "ALL" ||
+        v.ecosystem.toLowerCase() === selectedEcosystem.toLowerCase();
 
-    return matchesSearch && matchesSeverity && matchesEcosystem;
-  });
+      return matchesSearch && matchesSeverity && matchesEcosystem;
+    });
+  }, [vulnerabilities, searchTerm, selectedSeverity, selectedEcosystem]);
+
+  // Group filtered vulnerabilities by package to eliminate duplicate cards
+  const groupedVulns = useMemo(() => {
+    const list: GroupedPackageVulnerability[] = [];
+    const map = new Map<string, GroupedPackageVulnerability>();
+
+    for (const v of filteredVulns) {
+      const key = `${v.package}-${v.ecosystem}`;
+      if (!map.has(key)) {
+        const g: GroupedPackageVulnerability = {
+          package: v.package,
+          ecosystem: v.ecosystem,
+          installed_version: v.installed_version,
+          highest_severity: v.severity,
+          fixed_version: v.fixed_version,
+          affected_projects: [...(v.affected_projects || [])],
+          advisories: [v],
+          remediation: v.remediation,
+        };
+        map.set(key, g);
+        list.push(g);
+      } else {
+        const g = map.get(key)!;
+        g.advisories.push(v);
+        const currentRank = SEVERITY_RANK[g.highest_severity] ?? 99;
+        const newRank = SEVERITY_RANK[v.severity] ?? 99;
+        if (newRank < currentRank) {
+          g.highest_severity = v.severity;
+        }
+        if (v.fixed_version && (!g.fixed_version || v.fixed_version > g.fixed_version)) {
+          g.fixed_version = v.fixed_version;
+        }
+        for (const p of v.affected_projects || []) {
+          if (!g.affected_projects.includes(p)) {
+            g.affected_projects.push(p);
+          }
+        }
+      }
+    }
+
+    // Sort by highest severity rank ascending (CRITICAL -> HIGH -> MEDIUM -> LOW)
+    list.sort((a, b) => {
+      const rankA = SEVERITY_RANK[a.highest_severity] ?? 99;
+      const rankB = SEVERITY_RANK[b.highest_severity] ?? 99;
+      return rankA - rankB;
+    });
+
+    return list;
+  }, [filteredVulns]);
 
   const bySev = summary.by_severity || {};
   const hasCriticalOrHigh =
@@ -197,76 +260,134 @@ export default function SecurityPage() {
         </div>
       </div>
 
-      {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#7c6f64]" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by package name or CVE/GHSA identifier..."
-            className="w-full bg-[#282828] border border-[#504945] rounded-lg pl-10 pr-4 py-2 text-xs text-[#ebdbb2] placeholder-[#7c6f64] focus:outline-none focus:border-[#fe8019] font-mono transition"
-          />
+      {/* Filters, View Toggle & Search */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#7c6f64]" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by package name or CVE/GHSA identifier..."
+              className="w-full bg-[#282828] border border-[#504945] rounded-lg pl-10 pr-4 py-2 text-xs text-[#ebdbb2] placeholder-[#7c6f64] focus:outline-none focus:border-[#fe8019] font-mono transition"
+            />
+          </div>
+
+          {/* Severity Filter Pills */}
+          <div className="flex items-center space-x-1 overflow-x-auto pb-1 sm:pb-0">
+            {["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"].map((sev) => (
+              <button
+                key={sev}
+                onClick={() => setSelectedSeverity(sev)}
+                className={`px-3 py-1.5 rounded-md text-xs font-mono font-medium transition cursor-pointer shrink-0 ${
+                  selectedSeverity === sev
+                    ? "bg-[#fe8019] text-[#1d2021] font-semibold"
+                    : "bg-[#32302f] text-[#a89984] hover:text-[#ebdbb2] border border-[#504945]"
+                }`}
+              >
+                {sev}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Severity Filter Pills */}
-        <div className="flex items-center space-x-1 overflow-x-auto pb-1 sm:pb-0">
-          {["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"].map((sev) => (
+        {/* View Mode Switch */}
+        <div className="flex items-center justify-between text-xs pt-1 border-t border-[#3c3836]">
+          <div className="flex items-center space-x-1">
             <button
-              key={sev}
-              onClick={() => setSelectedSeverity(sev)}
-              className={`px-3 py-1.5 rounded-md text-xs font-mono font-medium transition cursor-pointer shrink-0 ${
-                selectedSeverity === sev
-                  ? "bg-[#fe8019] text-[#1d2021] font-semibold"
-                  : "bg-[#32302f] text-[#a89984] hover:text-[#ebdbb2] border border-[#504945]"
+              onClick={() => setViewMode("grouped")}
+              className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer ${
+                viewMode === "grouped"
+                  ? "bg-[#ebdbb2] text-[#1d2021] font-bold"
+                  : "bg-[#282828] text-[#a89984] hover:text-[#ebdbb2] border border-[#3c3836]"
               }`}
             >
-              {sev}
+              <Layers className="w-3.5 h-3.5" />
+              <span>Group by Package ({groupedVulns.length})</span>
             </button>
-          ))}
+
+            <button
+              onClick={() => setViewMode("individual")}
+              className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer ${
+                viewMode === "individual"
+                  ? "bg-[#ebdbb2] text-[#1d2021] font-bold"
+                  : "bg-[#282828] text-[#a89984] hover:text-[#ebdbb2] border border-[#3c3836]"
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>All Advisories ({filteredVulns.length})</span>
+            </button>
+          </div>
+
+          <span className="text-[#928374] font-mono text-[11px] hidden sm:inline">
+            {viewMode === "grouped"
+              ? "Aggregating all CVEs per affected package"
+              : "Showing each individual security advisory"}
+          </span>
         </div>
       </div>
 
       {/* Vulnerabilities List */}
       <div className="space-y-4">
-        {filteredVulns.length > 0 ? (
-          filteredVulns.map((vuln) => (
-            <VulnerabilityCard key={`${vuln.id}-${vuln.package}`} vuln={vuln} />
-          ))
-        ) : loading ? (
+        {loading ? (
           <div className="p-12 text-center text-xs text-[#a89984]">
             <RefreshCw className="w-6 h-6 text-[#fe8019] animate-spin mx-auto mb-2" />
             <span>Auditing security advisories...</span>
           </div>
+        ) : viewMode === "grouped" ? (
+          groupedVulns.length > 0 ? (
+            groupedVulns.map((group) => (
+              <GroupedVulnerabilityCard
+                key={`${group.package}-${group.ecosystem}`}
+                group={group}
+                onRemediated={fetchSecurityData}
+              />
+            ))
+          ) : (
+            <CleanStateCard />
+          )
+        ) : filteredVulns.length > 0 ? (
+          filteredVulns.map((vuln) => (
+            <VulnerabilityCard
+              key={`${vuln.id}-${vuln.package}`}
+              vuln={vuln}
+              onRemediated={fetchSecurityData}
+            />
+          ))
         ) : (
-          /* Clean State Card */
-          <div className="rounded-xl p-10 border border-[#504945] bg-[#32302f] text-center space-y-4">
-            <div className="w-14 h-14 rounded-xl bg-[#b8bb26]/15 border border-[#b8bb26]/30 text-[#b8bb26] flex items-center justify-center mx-auto">
-              <ShieldCheck className="w-7 h-7" />
-            </div>
-            <div className="max-w-md mx-auto space-y-1">
-              <h3 className="text-base font-bold text-[#fbf1c7] tracking-tight">
-                No Security Vulnerabilities Detected
-              </h3>
-              <p className="text-xs text-[#a89984] leading-relaxed">
-                All tracked package versions across your workspace projects match clean, non-vulnerable upstream releases in the Arch Linux Security Tracker and OSV database.
-              </p>
-            </div>
-            <div className="pt-2 flex justify-center items-center space-x-4 text-[11px] text-[#928374]">
-              <span className="flex items-center space-x-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#b8bb26]" />
-                <span>Arch Linux Security Tracker</span>
-              </span>
-              <span>•</span>
-              <span className="flex items-center space-x-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#b8bb26]" />
-                <span>OSV.dev Vulnerabilities</span>
-              </span>
-            </div>
-          </div>
+          <CleanStateCard />
         )}
+      </div>
+    </div>
+  );
+}
+
+function CleanStateCard() {
+  return (
+    <div className="rounded-xl p-10 border border-[#504945] bg-[#32302f] text-center space-y-4">
+      <div className="w-14 h-14 rounded-xl bg-[#b8bb26]/15 border border-[#b8bb26]/30 text-[#b8bb26] flex items-center justify-center mx-auto">
+        <ShieldCheck className="w-7 h-7" />
+      </div>
+      <div className="max-w-md mx-auto space-y-1">
+        <h3 className="text-base font-bold text-[#fbf1c7] tracking-tight">
+          No Security Vulnerabilities Detected
+        </h3>
+        <p className="text-xs text-[#a89984] leading-relaxed">
+          All tracked package versions across your workspace projects match clean, non-vulnerable upstream releases in the Arch Linux Security Tracker and OSV database.
+        </p>
+      </div>
+      <div className="pt-2 flex justify-center items-center space-x-4 text-[11px] text-[#928374]">
+        <span className="flex items-center space-x-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-[#b8bb26]" />
+          <span>Arch Linux Security Tracker</span>
+        </span>
+        <span>•</span>
+        <span className="flex items-center space-x-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-[#b8bb26]" />
+          <span>OSV.dev Vulnerabilities</span>
+        </span>
       </div>
     </div>
   );
