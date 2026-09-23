@@ -72,6 +72,7 @@ export interface Vulnerability {
 }
 
 export interface SecuritySummary {
+  total_packages_tracked?: number;
   total_vulnerabilities: number;
   by_severity: Record<string, number>;
   affected_packages_count: number;

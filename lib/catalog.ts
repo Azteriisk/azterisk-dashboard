@@ -164,13 +164,19 @@ export async function getSecurityData(): Promise<{
 }> {
   const catalog = await getCatalogData();
   const vulnerabilities = catalog.vulnerabilities || [];
-  const summary: SecuritySummary = catalog.security_summary || {
+  const totalPackagesTracked = Object.keys(catalog.packages || {}).length;
+  const summary: SecuritySummary = {
+    total_packages_tracked: totalPackagesTracked,
     total_vulnerabilities: vulnerabilities.length,
     by_severity: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, UNKNOWN: 0 },
     affected_packages_count: 0,
     affected_projects_count: 0,
     scanned_at: catalog.updated_at,
+    ...(catalog.security_summary || {}),
   };
+  if (!summary.total_packages_tracked) {
+    summary.total_packages_tracked = totalPackagesTracked;
+  }
 
   return {
     vulnerabilities,
@@ -195,11 +201,17 @@ export async function triggerSecurityScan(): Promise<{
   try {
     const { stdout, stderr } = await execAsync("azterisk-catalog security --rescan --json");
     const parsed = JSON.parse(stdout);
+    const catalog = await getCatalogData();
+    const totalPackagesTracked = Object.keys(catalog.packages || {}).length;
+    const summary: SecuritySummary = {
+      ...(parsed.summary || {}),
+      total_packages_tracked: parsed.summary?.total_packages_tracked || totalPackagesTracked,
+    };
     return {
       success: true,
       message: "Security scan complete.",
       vulnerabilities: parsed.vulnerabilities,
-      summary: parsed.summary,
+      summary,
     };
   } catch (err: any) {
     return {

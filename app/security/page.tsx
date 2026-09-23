@@ -36,6 +36,7 @@ const SEVERITY_RANK: Record<string, number> = {
 export default function SecurityPage() {
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [summary, setSummary] = useState<SecuritySummary>({
+    total_packages_tracked: 0,
     total_vulnerabilities: 0,
     by_severity: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, UNKNOWN: 0 },
     affected_packages_count: 0,
@@ -248,10 +249,12 @@ export default function SecurityPage() {
   const hasActionableFix = (fixed_version?: string | null, remediation?: string | null) => {
     return (
       Boolean(fixed_version) ||
-      (Boolean(remediation) &&
-        /^(bun|npm|pnpm|yarn|cargo|pip|pip3|go|paru|pacman)\b/.test(
-          remediation.replace(/^[^:]+:\s*/, "")
-        ))
+      Boolean(
+        remediation &&
+          /^(bun|npm|pnpm|yarn|cargo|pip|pip3|go|paru|pacman)\b/.test(
+            remediation.replace(/^[^:]+:\s*/, "")
+          )
+      )
     );
   };
 
@@ -449,21 +452,27 @@ export default function SecurityPage() {
             <span className="px-2.5 py-1 rounded-md bg-[#282828] border border-[#3c3836] text-[#ebdbb2] flex items-center space-x-1.5">
               <Box className="w-3.5 h-3.5 text-[#fe8019]" />
               <span>
-                <strong className="text-[#fbf1c7]">{totalActivePackages}</strong> Packages Tracked
+                <strong className="text-[#fbf1c7]">
+                  {loading ? "..." : (summary.total_packages_tracked || totalActivePackages)}
+                </strong> Packages Tracked
               </span>
             </span>
 
             <span className="px-2.5 py-1 rounded-md bg-[#282828] border border-[#3c3836] text-[#ebdbb2] flex items-center space-x-1.5">
               <ShieldAlert className="w-3.5 h-3.5 text-[#fabd2f]" />
               <span>
-                <strong className="text-[#fbf1c7]">{totalActiveAdvisories}</strong> Advisories (CVEs/GHSAs)
+                <strong className="text-[#fbf1c7]">
+                  {loading ? "..." : totalActiveAdvisories}
+                </strong> Advisories (CVEs/GHSAs)
               </span>
             </span>
 
             <span className="px-2.5 py-1 rounded-md bg-[#282828] border border-[#3c3836] text-[#ebdbb2] flex items-center space-x-1.5">
               <FolderGit2 className="w-3.5 h-3.5 text-[#83a598]" />
               <span>
-                <strong className="text-[#fbf1c7]">{summary.affected_projects_count || 0}</strong> Impacted Projects
+                <strong className="text-[#fbf1c7]">
+                  {loading ? "..." : (summary.affected_projects_count || 0)}
+                </strong> Impacted Projects
               </span>
             </span>
           </div>
