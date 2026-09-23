@@ -21,7 +21,8 @@ import {
   Square,
   Eye,
   EyeOff,
-  Check,
+  FolderGit2,
+  Box,
 } from "lucide-react";
 
 const SEVERITY_RANK: Record<string, number> = {
@@ -110,30 +111,12 @@ export default function SecurityPage() {
     }
   };
 
-  const filteredVulns = useMemo(() => {
-    return vulnerabilities.filter((v) => {
-      const matchesSearch =
-        v.package.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (v.title && v.title.toLowerCase().includes(searchTerm.toLowerCase()));
-
-      const matchesSeverity =
-        selectedSeverity === "ALL" || v.severity === selectedSeverity;
-
-      const matchesEcosystem =
-        selectedEcosystem === "ALL" ||
-        v.ecosystem.toLowerCase() === selectedEcosystem.toLowerCase();
-
-      return matchesSearch && matchesSeverity && matchesEcosystem;
-    });
-  }, [vulnerabilities, searchTerm, selectedSeverity, selectedEcosystem]);
-
-  // Group filtered vulnerabilities by package to eliminate duplicate cards
-  const groupedVulns = useMemo(() => {
+  // Group all raw vulnerabilities into unified package summaries FIRST to determine true highest severity
+  const allGroupedVulns = useMemo(() => {
     const list: GroupedPackageVulnerability[] = [];
     const map = new Map<string, GroupedPackageVulnerability>();
 
-    for (const v of filteredVulns) {
+    for (const v of vulnerabilities) {
       const key = `${v.package}-${v.ecosystem}`;
       if (!map.has(key)) {
         const g: GroupedPackageVulnerability = {
@@ -167,7 +150,6 @@ export default function SecurityPage() {
       }
     }
 
-    // Sort by highest severity rank ascending (CRITICAL -> HIGH -> MEDIUM -> LOW)
     list.sort((a, b) => {
       const rankA = SEVERITY_RANK[a.highest_severity] ?? 99;
       const rankB = SEVERITY_RANK[b.highest_severity] ?? 99;
@@ -175,33 +157,89 @@ export default function SecurityPage() {
     });
 
     return list;
-  }, [filteredVulns]);
+  }, [vulnerabilities]);
 
-  // Display lists taking into account hideRemediated toggle
+  // Filter grouped packages (by package name, ecosystem, and true highest severity)
+  const filteredGrouped = useMemo(() => {
+    return allGroupedVulns.filter((g) => {
+      const matchesSearch =
+        g.package.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        g.advisories.some(
+          (adv) =>
+            adv.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (adv.title && adv.title.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+
+      const matchesSeverity =
+        selectedSeverity === "ALL" || g.highest_severity === selectedSeverity;
+
+      const matchesEcosystem =
+        selectedEcosystem === "ALL" ||
+        g.ecosystem.toLowerCase() === selectedEcosystem.toLowerCase();
+
+      return matchesSearch && matchesSeverity && matchesEcosystem;
+    });
+  }, [allGroupedVulns, searchTerm, selectedSeverity, selectedEcosystem]);
+
+  // Filter individual raw advisories (by package name, CVE id, advisory severity)
+  const filteredIndividual = useMemo(() => {
+    return vulnerabilities.filter((v) => {
+      const matchesSearch =
+        v.package.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v.title && v.title.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchesSeverity =
+        selectedSeverity === "ALL" || v.severity === selectedSeverity;
+
+      const matchesEcosystem =
+        selectedEcosystem === "ALL" ||
+        v.ecosystem.toLowerCase() === selectedEcosystem.toLowerCase();
+
+      return matchesSearch && matchesSeverity && matchesEcosystem;
+    });
+  }, [vulnerabilities, searchTerm, selectedSeverity, selectedEcosystem]);
+
+  // Taking into account "Hide Remediated" toggle
   const visibleGrouped = useMemo(() => {
-    if (!hideRemediated) return groupedVulns;
-    return groupedVulns.filter((g) => !remediatedPackages.has(g.package));
-  }, [groupedVulns, hideRemediated, remediatedPackages]);
+    if (!hideRemediated) return filteredGrouped;
+    return filteredGrouped.filter((g) => !remediatedPackages.has(g.package));
+  }, [filteredGrouped, hideRemediated, remediatedPackages]);
 
   const visibleIndividual = useMemo(() => {
-    if (!hideRemediated) return filteredVulns;
-    return filteredVulns.filter((v) => !remediatedPackages.has(v.package));
-  }, [filteredVulns, hideRemediated, remediatedPackages]);
+    if (!hideRemediated) return filteredIndividual;
+    return filteredIndividual.filter((v) => !remediatedPackages.has(v.package));
+  }, [filteredIndividual, hideRemediated, remediatedPackages]);
 
-  // Compute live active severity counts excluding optimistically remediated items
-  const activeSeverityCounts = useMemo(() => {
+  // Active un-remediated PACKAGE counts by highest severity
+  const activePackageCounts = useMemo(() => {
+    const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, UNKNOWN: 0 };
+    for (const g of allGroupedVulns) {
+      if (!remediatedPackages.has(g.package)) {
+        counts[g.highest_severity as keyof typeof counts] =
+          (counts[g.highest_severity as keyof typeof counts] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [allGroupedVulns, remediatedPackages]);
+
+  // Active un-remediated ADVISORY counts by individual CVE severity
+  const activeAdvisoryCounts = useMemo(() => {
     const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, UNKNOWN: 0 };
     for (const v of vulnerabilities) {
       if (!remediatedPackages.has(v.package)) {
-        counts[v.severity] = (counts[v.severity] || 0) + 1;
+        counts[v.severity as keyof typeof counts] =
+          (counts[v.severity as keyof typeof counts] || 0) + 1;
       }
     }
     return counts;
   }, [vulnerabilities, remediatedPackages]);
 
-  const totalActiveVulns = Object.values(activeSeverityCounts).reduce((a, b) => a + b, 0);
+  const totalActivePackages = Object.values(activePackageCounts).reduce((a, b) => a + b, 0);
+  const totalActiveAdvisories = Object.values(activeAdvisoryCounts).reduce((a, b) => a + b, 0);
+
   const hasCriticalOrHigh =
-    (activeSeverityCounts.CRITICAL || 0) > 0 || (activeSeverityCounts.HIGH || 0) > 0;
+    (activePackageCounts.CRITICAL || 0) > 0 || (activePackageCounts.HIGH || 0) > 0;
 
   // Multi-select helpers
   const selectableKeys = useMemo(() => {
@@ -299,7 +337,6 @@ export default function SecurityPage() {
         setNotification(data.message || data.error || "Batch remediation completed with issues.");
       }
 
-      // Re-fetch fresh security audit from server
       await fetchSecurityData();
     } catch (err: any) {
       setNotification(`Batch remediation failed: ${err.message}`);
@@ -311,7 +348,7 @@ export default function SecurityPage() {
 
   const handleApplySelected = () => {
     if (viewMode === "grouped") {
-      const itemsToFix = groupedVulns
+      const itemsToFix = allGroupedVulns
         .filter((g) => selectedKeys.has(`${g.package}-${g.ecosystem}`) && !remediatedPackages.has(g.package))
         .map((g) => ({
           package_name: g.package,
@@ -322,7 +359,7 @@ export default function SecurityPage() {
         }));
       runBatchRemediation(itemsToFix);
     } else {
-      const itemsToFix = filteredVulns
+      const itemsToFix = vulnerabilities
         .filter((v) => selectedKeys.has(`${v.id}-${v.package}`) && !remediatedPackages.has(v.package))
         .map((v) => ({
           package_name: v.package,
@@ -336,8 +373,7 @@ export default function SecurityPage() {
   };
 
   const handleApplyAll = () => {
-    // In grouped mode or individual mode, apply fixes to all visible un-remediated packages
-    const itemsToFix = groupedVulns
+    const itemsToFix = allGroupedVulns
       .filter((g) => !remediatedPackages.has(g.package))
       .map((g) => ({
         package_name: g.package,
@@ -364,7 +400,7 @@ export default function SecurityPage() {
     <div className="space-y-8 max-w-6xl mx-auto">
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 sm:p-7 rounded-2xl border border-[#504945] bg-[#32302f] shadow-xs">
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded-md bg-[#3c3836] border border-[#504945] text-[#fe8019] text-xs font-mono font-medium">
             {hasCriticalOrHigh ? (
               <ShieldAlert className="w-3.5 h-3.5 text-[#fb4934]" />
@@ -373,15 +409,41 @@ export default function SecurityPage() {
             )}
             <span>Security &amp; Advisory Audit</span>
           </div>
+
           <h1 className="text-2xl sm:text-3xl font-bold text-[#fbf1c7] tracking-tight">
             Security &amp; Advisory Radar
           </h1>
+
           <p className="text-xs sm:text-sm text-[#a89984] max-w-2xl leading-relaxed">
-            Vulnerability auditing across your tracked projects and dependencies.
-            Correlates local package versions with official advisories from the{" "}
+            Vulnerability auditing across your tracked workspace projects and dependencies.
+            Correlates local versions with the{" "}
             <strong className="text-[#ebdbb2] font-semibold">Arch Linux Security Tracker</strong> and{" "}
             <strong className="text-[#ebdbb2] font-semibold">Open Source Vulnerabilities (OSV.dev)</strong>.
           </p>
+
+          {/* High-level breakdown pills */}
+          <div className="flex items-center flex-wrap gap-2 pt-1 text-xs font-mono">
+            <span className="px-2.5 py-1 rounded-md bg-[#282828] border border-[#3c3836] text-[#ebdbb2] flex items-center space-x-1.5">
+              <Box className="w-3.5 h-3.5 text-[#fe8019]" />
+              <span>
+                <strong className="text-[#fbf1c7]">{totalActivePackages}</strong> Packages Tracked
+              </span>
+            </span>
+
+            <span className="px-2.5 py-1 rounded-md bg-[#282828] border border-[#3c3836] text-[#ebdbb2] flex items-center space-x-1.5">
+              <ShieldAlert className="w-3.5 h-3.5 text-[#fabd2f]" />
+              <span>
+                <strong className="text-[#fbf1c7]">{totalActiveAdvisories}</strong> Advisories (CVEs/GHSAs)
+              </span>
+            </span>
+
+            <span className="px-2.5 py-1 rounded-md bg-[#282828] border border-[#3c3836] text-[#ebdbb2] flex items-center space-x-1.5">
+              <FolderGit2 className="w-3.5 h-3.5 text-[#83a598]" />
+              <span>
+                <strong className="text-[#fbf1c7]">{summary.affected_projects_count || 0}</strong> Impacted Projects
+              </span>
+            </span>
+          </div>
         </div>
 
         {/* Scan Button */}
@@ -413,50 +475,102 @@ export default function SecurityPage() {
         </div>
       )}
 
-      {/* Severity Breakdown Cards (Live Decremented as Remediated) */}
+      {/* Interactive Severity Breakdown Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5">
+        {/* CRITICAL */}
+        <div
+          onClick={() => setSelectedSeverity(selectedSeverity === "CRITICAL" ? "ALL" : "CRITICAL")}
+          className={`bg-[#32302f] border rounded-xl p-5 cursor-pointer transition select-none ${
+            selectedSeverity === "CRITICAL"
+              ? "border-[#fb4934] ring-2 ring-[#fb4934]/40 shadow-xs"
+              : "border-[#504945] hover:border-[#fb4934]/60"
+          }`}
+          title="Click to filter by CRITICAL severity"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono font-medium text-[#a89984]">CRITICAL</span>
+            <span className="text-xs font-mono font-medium text-[#fb4934]">CRITICAL</span>
             <AlertOctagon className="w-4 h-4 text-[#fb4934]" />
           </div>
           <div className="mt-2 text-2xl font-bold text-[#fb4934] font-mono">
-            {activeSeverityCounts.CRITICAL || 0}
+            {viewMode === "grouped" ? activePackageCounts.CRITICAL || 0 : activeAdvisoryCounts.CRITICAL || 0}
           </div>
-          <span className="text-[11px] text-[#928374] mt-1 block">Immediate action required</span>
+          <span className="text-[11px] text-[#928374] mt-1 block">
+            {viewMode === "grouped"
+              ? `${activePackageCounts.CRITICAL || 0} package(s) (${activeAdvisoryCounts.CRITICAL} CVEs)`
+              : `${activeAdvisoryCounts.CRITICAL || 0} critical advisories`}
+          </span>
         </div>
 
-        <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5">
+        {/* HIGH */}
+        <div
+          onClick={() => setSelectedSeverity(selectedSeverity === "HIGH" ? "ALL" : "HIGH")}
+          className={`bg-[#32302f] border rounded-xl p-5 cursor-pointer transition select-none ${
+            selectedSeverity === "HIGH"
+              ? "border-[#fe8019] ring-2 ring-[#fe8019]/40 shadow-xs"
+              : "border-[#504945] hover:border-[#fe8019]/60"
+          }`}
+          title="Click to filter by HIGH severity"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono font-medium text-[#a89984]">HIGH</span>
+            <span className="text-xs font-mono font-medium text-[#fe8019]">HIGH</span>
             <ShieldAlert className="w-4 h-4 text-[#fe8019]" />
           </div>
           <div className="mt-2 text-2xl font-bold text-[#fe8019] font-mono">
-            {activeSeverityCounts.HIGH || 0}
+            {viewMode === "grouped" ? activePackageCounts.HIGH || 0 : activeAdvisoryCounts.HIGH || 0}
           </div>
-          <span className="text-[11px] text-[#928374] mt-1 block">High risk CVEs</span>
+          <span className="text-[11px] text-[#928374] mt-1 block">
+            {viewMode === "grouped"
+              ? `${activePackageCounts.HIGH || 0} package(s) (${activeAdvisoryCounts.HIGH} CVEs)`
+              : `${activeAdvisoryCounts.HIGH || 0} high risk CVEs`}
+          </span>
         </div>
 
-        <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5">
+        {/* MEDIUM */}
+        <div
+          onClick={() => setSelectedSeverity(selectedSeverity === "MEDIUM" ? "ALL" : "MEDIUM")}
+          className={`bg-[#32302f] border rounded-xl p-5 cursor-pointer transition select-none ${
+            selectedSeverity === "MEDIUM"
+              ? "border-[#fabd2f] ring-2 ring-[#fabd2f]/40 shadow-xs"
+              : "border-[#504945] hover:border-[#fabd2f]/60"
+          }`}
+          title="Click to filter by MEDIUM severity"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono font-medium text-[#a89984]">MEDIUM</span>
+            <span className="text-xs font-mono font-medium text-[#fabd2f]">MEDIUM</span>
             <AlertTriangle className="w-4 h-4 text-[#fabd2f]" />
           </div>
           <div className="mt-2 text-2xl font-bold text-[#fabd2f] font-mono">
-            {activeSeverityCounts.MEDIUM || 0}
+            {viewMode === "grouped" ? activePackageCounts.MEDIUM || 0 : activeAdvisoryCounts.MEDIUM || 0}
           </div>
-          <span className="text-[11px] text-[#928374] mt-1 block">Moderate risk</span>
+          <span className="text-[11px] text-[#928374] mt-1 block">
+            {viewMode === "grouped"
+              ? `${activePackageCounts.MEDIUM || 0} package(s) (${activeAdvisoryCounts.MEDIUM} CVEs)`
+              : `${activeAdvisoryCounts.MEDIUM || 0} moderate CVEs`}
+          </span>
         </div>
 
-        <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5">
+        {/* LOW */}
+        <div
+          onClick={() => setSelectedSeverity(selectedSeverity === "LOW" ? "ALL" : "LOW")}
+          className={`bg-[#32302f] border rounded-xl p-5 cursor-pointer transition select-none ${
+            selectedSeverity === "LOW"
+              ? "border-[#83a598] ring-2 ring-[#83a598]/40 shadow-xs"
+              : "border-[#504945] hover:border-[#83a598]/60"
+          }`}
+          title="Click to filter by LOW severity"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono font-medium text-[#a89984]">LOW</span>
+            <span className="text-xs font-mono font-medium text-[#83a598]">LOW</span>
             <Info className="w-4 h-4 text-[#83a598]" />
           </div>
           <div className="mt-2 text-2xl font-bold text-[#83a598] font-mono">
-            {activeSeverityCounts.LOW || 0}
+            {viewMode === "grouped" ? activePackageCounts.LOW || 0 : activeAdvisoryCounts.LOW || 0}
           </div>
-          <span className="text-[11px] text-[#928374] mt-1 block">Minor severity</span>
+          <span className="text-[11px] text-[#928374] mt-1 block">
+            {viewMode === "grouped"
+              ? `${activePackageCounts.LOW || 0} package(s) (${activeAdvisoryCounts.LOW} CVEs)`
+              : `${activeAdvisoryCounts.LOW || 0} low severity CVEs`}
+          </span>
         </div>
       </div>
 
@@ -563,19 +677,54 @@ export default function SecurityPage() {
             />
           </div>
 
-          {/* Severity Filter Pills */}
+          {/* Severity Filter Pills with Accurate Dynamic Counters */}
           <div className="flex items-center space-x-1 overflow-x-auto pb-1 sm:pb-0">
-            {["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"].map((sev) => (
+            {[
+              {
+                id: "ALL",
+                label: "ALL",
+                count: viewMode === "grouped" ? totalActivePackages : totalActiveAdvisories,
+              },
+              {
+                id: "CRITICAL",
+                label: "CRITICAL",
+                count: viewMode === "grouped" ? activePackageCounts.CRITICAL : activeAdvisoryCounts.CRITICAL,
+              },
+              {
+                id: "HIGH",
+                label: "HIGH",
+                count: viewMode === "grouped" ? activePackageCounts.HIGH : activeAdvisoryCounts.HIGH,
+              },
+              {
+                id: "MEDIUM",
+                label: "MEDIUM",
+                count: viewMode === "grouped" ? activePackageCounts.MEDIUM : activeAdvisoryCounts.MEDIUM,
+              },
+              {
+                id: "LOW",
+                label: "LOW",
+                count: viewMode === "grouped" ? activePackageCounts.LOW : activeAdvisoryCounts.LOW,
+              },
+            ].map(({ id, label, count }) => (
               <button
-                key={sev}
-                onClick={() => setSelectedSeverity(sev)}
-                className={`px-3 py-1.5 rounded-md text-xs font-mono font-medium transition cursor-pointer shrink-0 ${
-                  selectedSeverity === sev
+                key={id}
+                onClick={() => setSelectedSeverity(id)}
+                className={`px-3 py-1.5 rounded-md text-xs font-mono font-medium transition cursor-pointer shrink-0 flex items-center space-x-1.5 ${
+                  selectedSeverity === id
                     ? "bg-[#fe8019] text-[#1d2021] font-semibold"
                     : "bg-[#32302f] text-[#a89984] hover:text-[#ebdbb2] border border-[#504945]"
                 }`}
               >
-                {sev}
+                <span>{label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                    selectedSeverity === id
+                      ? "bg-[#1d2021] text-[#fe8019]"
+                      : "bg-[#282828] text-[#d5c4a1]"
+                  }`}
+                >
+                  {count || 0}
+                </span>
               </button>
             ))}
           </div>
@@ -585,7 +734,10 @@ export default function SecurityPage() {
         <div className="flex items-center justify-between text-xs pt-1 border-t border-[#3c3836]">
           <div className="flex items-center space-x-1">
             <button
-              onClick={() => setViewMode("grouped")}
+              onClick={() => {
+                setViewMode("grouped");
+                setSelectedKeys(new Set());
+              }}
               className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer ${
                 viewMode === "grouped"
                   ? "bg-[#ebdbb2] text-[#1d2021] font-bold"
@@ -593,11 +745,14 @@ export default function SecurityPage() {
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Group by Package ({groupedVulns.length})</span>
+              <span>Group by Package ({totalActivePackages})</span>
             </button>
 
             <button
-              onClick={() => setViewMode("individual")}
+              onClick={() => {
+                setViewMode("individual");
+                setSelectedKeys(new Set());
+              }}
               className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer ${
                 viewMode === "individual"
                   ? "bg-[#ebdbb2] text-[#1d2021] font-bold"
@@ -605,14 +760,14 @@ export default function SecurityPage() {
               }`}
             >
               <List className="w-3.5 h-3.5" />
-              <span>All Advisories ({filteredVulns.length})</span>
+              <span>All Advisories ({totalActiveAdvisories})</span>
             </button>
           </div>
 
           <span className="text-[#928374] font-mono text-[11px] hidden sm:inline">
             {viewMode === "grouped"
-              ? "Aggregating all CVEs per affected package"
-              : "Showing each individual security advisory"}
+              ? "Aggregated by package with highest severity classification"
+              : "Showing each individual CVE / GHSA advisory"}
           </span>
         </div>
       </div>
