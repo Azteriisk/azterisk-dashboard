@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Package } from "@/lib/types";
 import DependencyTable from "@/components/DependencyTable";
 import { Package as PackageIcon, RefreshCw } from "lucide-react";
 
-export default function DependenciesPage() {
+function DependenciesContent() {
+  const searchParams = useSearchParams();
+  const initialStatus = searchParams.get("status") || "all";
+
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,8 +52,27 @@ export default function DependenciesPage() {
           <span className="text-xs">Loading dependency catalog...</span>
         </div>
       ) : (
-        <DependencyTable packages={packages} />
+        <DependencyTable
+          packages={packages}
+          initialStatus={initialStatus}
+          onRefresh={fetchPackages}
+        />
       )}
     </div>
+  );
+}
+
+export default function DependenciesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="py-16 text-center text-[#a89984] flex flex-col items-center justify-center space-y-2">
+          <RefreshCw className="w-6 h-6 animate-spin text-[#fe8019]" />
+          <span className="text-xs">Loading dependencies...</span>
+        </div>
+      }
+    >
+      <DependenciesContent />
+    </Suspense>
   );
 }

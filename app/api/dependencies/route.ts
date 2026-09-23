@@ -6,12 +6,19 @@ export async function GET(req: NextRequest) {
     const catalog = await getCatalogData();
     const searchParams = req.nextUrl.searchParams;
     const type = searchParams.get("type");
+    const statusParam = searchParams.get("status");
     const query = searchParams.get("q")?.toLowerCase();
 
     let packages = Object.values(catalog.packages);
 
     if (type && type !== "all") {
       packages = packages.filter((p) => p.pkg_type.toLowerCase() === type.toLowerCase());
+    }
+
+    if (statusParam === "missing") {
+      packages = packages.filter((p) => !p.installed);
+    } else if (statusParam === "installed") {
+      packages = packages.filter((p) => p.installed);
     }
 
     if (query) {

@@ -143,16 +143,19 @@ export default async function DashboardPage() {
           <span className="text-[11px] text-[#928374] mt-1 block">Indexed packages</span>
         </Link>
 
-        <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5">
+        <Link
+          href="/dependencies?status=missing"
+          className="bg-[#32302f] border border-[#504945] hover:border-[#fb4934]/60 hover:bg-[#3c3836] rounded-xl p-5 transition block group"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-[#a89984]">Missing Packages</span>
-            <AlertTriangle className="w-4 h-4 text-[#fb4934]" />
+            <AlertTriangle className="w-4 h-4 text-[#fb4934] group-hover:translate-x-0.5 transition" />
           </div>
           <div className="mt-2 text-2xl font-bold text-[#fb4934] font-mono">
             {stats.missing_packages}
           </div>
           <span className="text-[11px] text-[#928374] mt-1 block">Uninstalled dependencies</span>
-        </div>
+        </Link>
 
         <Link
           href="/security"

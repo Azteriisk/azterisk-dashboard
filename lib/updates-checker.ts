@@ -85,6 +85,20 @@ export async function inspectPacmanLocal(pkgName: string): Promise<{
   }
 }
 
+export async function compareVersions(v1: string, v2: string): Promise<number> {
+  if (v1 === v2) return 0;
+  if (isLocalEnvironment()) {
+    try {
+      const { stdout } = await execAsync(`vercmp "${v1}" "${v2}" 2>/dev/null`);
+      const val = parseInt(stdout.trim(), 10);
+      if (!isNaN(val)) return val;
+    } catch {
+      // Fallback
+    }
+  }
+  return v1.localeCompare(v2, undefined, { numeric: true });
+}
+
 export async function getCriticalWatchList(
   catalog: CatalogData,
   customWatchNames?: string[]
@@ -148,10 +162,35 @@ export async function getCriticalWatchList(
     }
 
     let status: "up_to_date" | "update_available" | "diverged" = "up_to_date";
+    let isAhead = false;
+    let actionLabel: string | undefined = undefined;
+    let actionCommand: string | undefined = undefined;
+
     if (installedVer === "Not installed") {
       status = "diverged";
+      actionLabel = "Install Package";
+      actionCommand = `yay -S --needed ${name}`;
     } else if (upstreamVer && installedVer !== upstreamVer) {
-      status = "update_available";
+      const cmp = await compareVersions(installedVer, upstreamVer);
+      if (cmp > 0) {
+        // Installed is ahead of upstream (e.g. custom fork)
+        status = "update_available";
+        isAhead = true;
+        if (name === "linux-wallpaperengine-git") {
+          actionLabel = "Rebuild Local Fork";
+          actionCommand = "cd ~/Projects/linux-wallpaperengine/packaging/archlinux && makepkg -si";
+        } else {
+          actionLabel = "Rebuild Local Fork";
+          actionCommand = `yay -S --needed ${name}`;
+        }
+      } else if (cmp < 0) {
+        status = "update_available";
+        isAhead = false;
+        actionLabel = aurResults[name] ? "Update via yay" : "Update via pacman";
+        actionCommand = aurResults[name] ? `yay -S ${name}` : `sudo pacman -S ${name}`;
+      } else {
+        status = "up_to_date";
+      }
     }
 
     let desc = "";
@@ -181,6 +220,9 @@ export async function getCriticalWatchList(
       description: desc,
       dependents_count: dependents,
       is_critical: true,
+      action_command: actionCommand,
+      action_label: actionLabel,
+      is_ahead: isAhead,
     });
   }
 

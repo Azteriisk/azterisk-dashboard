@@ -49,6 +49,9 @@ export interface CriticalWatch {
   description: string;
   dependents_count: number;
   is_critical: boolean;
+  action_command?: string;
+  action_label?: string;
+  is_ahead?: boolean;
 }
 
 export interface Vulnerability {
