@@ -65,7 +65,11 @@ export default function SecurityPage() {
     try {
       setLoading(true);
       const res = await fetch("/api/security");
-      const data = await res.json();
+      if (!res.ok) {
+        setNotification(`Failed to fetch security advisory data (HTTP ${res.status}).`);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
       if (data.vulnerabilities) {
         setVulnerabilities(data.vulnerabilities);
       }
@@ -94,7 +98,7 @@ export default function SecurityPage() {
       setScanning(true);
       setNotification(null);
       const res = await fetch("/api/security", { method: "POST" });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ error: `Server returned HTTP ${res.status}` }));
       if (res.ok) {
         setVulnerabilities(data.vulnerabilities || []);
         if (data.summary) setSummary(data.summary);
@@ -315,8 +319,12 @@ export default function SecurityPage() {
         body: JSON.stringify({ items }),
       });
 
-      const data = await res.json();
-      if (data.results) {
+      const data = await res.json().catch(() => ({
+        success: false,
+        error: `Server error (${res.status}): Failed to parse response.`,
+      }));
+
+      if (res.ok && data.results) {
         const newlyRemediated = new Set(remediatedPackages);
         for (const r of data.results) {
           if (r.success) {
@@ -329,7 +337,7 @@ export default function SecurityPage() {
           data.message ||
             `Batch remediation finished: ${data.succeeded || 0} succeeded, ${data.failed || 0} failed.`
         );
-      } else if (data.success) {
+      } else if (res.ok && data.success) {
         items.forEach((i) => setRemediatedPackages((prev) => new Set(prev).add(i.package_name)));
         setSelectedKeys(new Set());
         setNotification(data.message || "Successfully applied fixes.");

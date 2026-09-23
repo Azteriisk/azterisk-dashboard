@@ -12,6 +12,7 @@ interface RemediationItem {
   project_name?: string;
   affected_projects?: string[];
   ecosystem: string;
+  installed_version?: string | null;
   fixed_version?: string | null;
   command?: string | null;
 }
@@ -25,13 +26,22 @@ interface ItemResult {
   updated_manifest: boolean;
 }
 
+async function isCommandAvailable(cmd: string): Promise<boolean> {
+  try {
+    await execAsync(`which ${cmd}`, { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function remediateSingleItem(
   item: RemediationItem,
   catalog: any
 ): Promise<ItemResult> {
   const packageName = item.package_name.trim();
   const ecosystem = (item.ecosystem || "").toLowerCase();
-  const fixedVersion = item.fixed_version?.trim();
+  const fixedVersion = item.fixed_version?.trim() || "";
   const customCommand = item.command?.trim();
 
   // Determine all target project names
@@ -41,14 +51,12 @@ async function remediateSingleItem(
   } else if (item.project_name) {
     targetProjects = [item.project_name];
   } else {
-    // Attempt lookup from catalog
     const pkgEntry = catalog.packages?.[packageName];
     if (pkgEntry?.required_by?.length) {
       targetProjects = [...pkgEntry.required_by];
     }
   }
 
-  // Deduplicate target projects
   targetProjects = Array.from(new Set(targetProjects));
 
   const executedCommands: string[] = [];
@@ -58,7 +66,6 @@ async function remediateSingleItem(
   let lastErrorMessage = "";
 
   if (targetProjects.length === 0) {
-    // No target project detected, run fallback command if provided
     if (customCommand) {
       try {
         await execAsync(customCommand, { timeout: 45000 });
@@ -100,9 +107,13 @@ async function remediateSingleItem(
 
     let projManifestUpdated = false;
 
-    // 1. Python / Pip
+    // -------------------------------------------------------------
+    // 1. Python / Pip Ecosystem
+    // -------------------------------------------------------------
     if (ecosystem === "pip" || ecosystem === "pypi") {
       const reqFile = path.join(projectDir, "requirements.txt");
+      const pyprojectFile = path.join(projectDir, "pyproject.toml");
+
       try {
         const content = await fs.readFile(reqFile, "utf-8");
         const lines = content.split("\n");
@@ -123,73 +134,259 @@ async function remediateSingleItem(
           updatedManifestAny = true;
         }
       } catch {
-        // requirements.txt might not exist
+        // requirements.txt might not exist, check pyproject.toml
+        try {
+          const pyContent = await fs.readFile(pyprojectFile, "utf-8");
+          const lines = pyContent.split("\n");
+          let modified = false;
+          const updatedLines = lines.map((line) => {
+            if (line.includes(`"${packageName}`) || line.includes(`'${packageName}`)) {
+              modified = true;
+              return fixedVersion
+                ? line.replace(new RegExp(`["']${packageName}[><=\\w.-]*["']`), `"${packageName}>=${fixedVersion}"`)
+                : line;
+            }
+            return line;
+          });
+          if (modified) {
+            await fs.writeFile(pyprojectFile, updatedLines.join("\n"), "utf-8");
+            projManifestUpdated = true;
+            updatedManifestAny = true;
+          }
+        } catch {
+          // No pyproject.toml either
+        }
       }
 
-      const pipCmd = fixedVersion
-        ? `pip install --upgrade '${packageName}>=${fixedVersion}'`
-        : `pip install --upgrade ${packageName}`;
+      const hasPip = await isCommandAvailable("pip");
+      if (hasPip) {
+        const pipCmd = fixedVersion
+          ? `pip install --upgrade '${packageName}>=${fixedVersion}'`
+          : `pip install --upgrade ${packageName}`;
 
-      try {
-        await execAsync(pipCmd, { cwd: projectDir, timeout: 35000 });
-        executedCommands.push(`${pipCmd} (${projName})`);
-        projectsUpdated.push(projName);
-      } catch (err: any) {
-        if (!projManifestUpdated) {
-          hadAnyFailure = true;
-          lastErrorMessage = err.stderr || err.message || `pip upgrade failed in ${projName}`;
-        } else {
-          executedCommands.push(`${pipCmd} [manifest updated] (${projName})`);
+        try {
+          await execAsync(pipCmd, { cwd: projectDir, timeout: 35000 });
+          executedCommands.push(`${pipCmd} (${projName})`);
           projectsUpdated.push(projName);
+        } catch (err: any) {
+          if (projManifestUpdated) {
+            executedCommands.push(`Manifest pinned to >=${fixedVersion} (${projName})`);
+            projectsUpdated.push(projName);
+          } else {
+            hadAnyFailure = true;
+            lastErrorMessage = err.stderr || err.message || `pip upgrade failed in ${projName}`;
+          }
+        }
+      } else {
+        if (projManifestUpdated) {
+          executedCommands.push(`Manifest pinned to >=${fixedVersion} [pip not installed] (${projName})`);
+          projectsUpdated.push(projName);
+        } else {
+          hadAnyFailure = true;
+          lastErrorMessage = `Python pip is not installed on host ('sudo pacman -S python-pip' recommended).`;
         }
       }
     }
-    // 2. Node.js / npm
+
+    // -------------------------------------------------------------
+    // 2. Node.js / npm Ecosystem
+    // -------------------------------------------------------------
     else if (ecosystem === "npm" || ecosystem === "node") {
-      let nodeCmd = `bun update ${packageName}`;
-      try {
-        await execAsync(nodeCmd, { cwd: projectDir, timeout: 45000 });
-        executedCommands.push(`${nodeCmd} (${projName})`);
-        projectsUpdated.push(projName);
-      } catch {
-        nodeCmd = `npm update ${packageName}`;
+      const hasBun = await isCommandAvailable("bun");
+      const hasNpm = await isCommandAvailable("npm");
+
+      let nodeCmd = hasBun ? `bun update ${packageName}` : hasNpm ? `npm update ${packageName}` : "";
+
+      if (nodeCmd) {
         try {
           await execAsync(nodeCmd, { cwd: projectDir, timeout: 45000 });
           executedCommands.push(`${nodeCmd} (${projName})`);
           projectsUpdated.push(projName);
         } catch (err: any) {
+          // If bun failed, try npm
+          if (hasBun && hasNpm) {
+            try {
+              nodeCmd = `npm update ${packageName}`;
+              await execAsync(nodeCmd, { cwd: projectDir, timeout: 45000 });
+              executedCommands.push(`${nodeCmd} (${projName})`);
+              projectsUpdated.push(projName);
+            } catch (fallbackErr: any) {
+              hadAnyFailure = true;
+              lastErrorMessage = fallbackErr.stderr || fallbackErr.message || `Update failed in ${projName}`;
+            }
+          } else {
+            hadAnyFailure = true;
+            lastErrorMessage = err.stderr || err.message || `Update failed in ${projName}`;
+          }
+        }
+      } else {
+        // Direct package.json pinning fallback
+        const pkgJsonFile = path.join(projectDir, "package.json");
+        try {
+          const content = await fs.readFile(pkgJsonFile, "utf-8");
+          const pkgJson = JSON.parse(content);
+          let modified = false;
+
+          if (pkgJson.dependencies?.[packageName]) {
+            pkgJson.dependencies[packageName] = fixedVersion ? `^${fixedVersion}` : "latest";
+            modified = true;
+          }
+          if (pkgJson.devDependencies?.[packageName]) {
+            pkgJson.devDependencies[packageName] = fixedVersion ? `^${fixedVersion}` : "latest";
+            modified = true;
+          }
+
+          if (modified) {
+            await fs.writeFile(pkgJsonFile, JSON.stringify(pkgJson, null, 2) + "\n", "utf-8");
+            projManifestUpdated = true;
+            updatedManifestAny = true;
+            executedCommands.push(`package.json updated to ^${fixedVersion} (${projName})`);
+            projectsUpdated.push(projName);
+          }
+        } catch {
           hadAnyFailure = true;
-          lastErrorMessage = err.stderr || err.message || `npm/bun update failed in ${projName}`;
+          lastErrorMessage = `No Node package manager (bun/npm) found and package.json could not be modified.`;
         }
       }
     }
-    // 3. Rust / Cargo
+
+    // -------------------------------------------------------------
+    // 3. Rust / Cargo Ecosystem
+    // -------------------------------------------------------------
     else if (ecosystem === "cargo" || ecosystem === "rust") {
-      const cargoCmd = `cargo update -p ${packageName}`;
-      try {
-        await execAsync(cargoCmd, { cwd: projectDir, timeout: 45000 });
-        executedCommands.push(`${cargoCmd} (${projName})`);
-        projectsUpdated.push(projName);
-      } catch (err: any) {
-        hadAnyFailure = true;
-        lastErrorMessage = err.stderr || err.message || `cargo update failed in ${projName}`;
+      const hasCargo = await isCommandAvailable("cargo");
+
+      if (hasCargo) {
+        let cargoCmd = `cargo update -p ${packageName}`;
+        try {
+          await execAsync(cargoCmd, { cwd: projectDir, timeout: 45000 });
+          executedCommands.push(`${cargoCmd} (${projName})`);
+          projectsUpdated.push(projName);
+        } catch (err: any) {
+          // If error is ambiguous (e.g. rand), try specifying installed version
+          const installedVer = item.installed_version;
+          if (installedVer) {
+            const specificCmd = `cargo update -p ${packageName}@${installedVer}`;
+            try {
+              await execAsync(specificCmd, { cwd: projectDir, timeout: 45000 });
+              executedCommands.push(`${specificCmd} (${projName})`);
+              projectsUpdated.push(projName);
+            } catch (err2: any) {
+              hadAnyFailure = true;
+              lastErrorMessage = err2.stderr || err2.message || `cargo update failed in ${projName}`;
+            }
+          } else {
+            hadAnyFailure = true;
+            lastErrorMessage = err.stderr || err.message || `cargo update failed in ${projName}`;
+          }
+        }
+      } else {
+        // Direct Cargo.toml pinning fallback when Cargo CLI is not installed
+        const cargoTomlFile = path.join(projectDir, "Cargo.toml");
+        try {
+          const content = await fs.readFile(cargoTomlFile, "utf-8");
+          const lines = content.split("\n");
+          let modified = false;
+          const cleanFixed = fixedVersion.replace(/^v/, "");
+
+          const updatedLines = lines.map((line) => {
+            const trimmed = line.trim();
+            if (trimmed.startsWith(`${packageName} =`) || trimmed.startsWith(`${packageName}=`)) {
+              modified = true;
+              if (cleanFixed) {
+                if (line.includes(`version = "`)) {
+                  return line.replace(/version\s*=\s*"[^"]+"/, `version = ">=${cleanFixed}"`);
+                } else {
+                  return line.replace(/=\s*"[^"]+"/, `= ">=${cleanFixed}"`);
+                }
+              }
+            }
+            return line;
+          });
+
+          if (modified) {
+            await fs.writeFile(cargoTomlFile, updatedLines.join("\n"), "utf-8");
+            projManifestUpdated = true;
+            updatedManifestAny = true;
+            executedCommands.push(`Cargo.toml pinned to >=${cleanFixed} [Cargo CLI not installed on host] (${projName})`);
+            projectsUpdated.push(projName);
+          } else {
+            hadAnyFailure = true;
+            lastErrorMessage = `Cargo CLI is not installed on host ('sudo pacman -S rust' recommended).`;
+          }
+        } catch {
+          hadAnyFailure = true;
+          lastErrorMessage = `Cargo CLI is not installed on host ('sudo pacman -S rust' recommended).`;
+        }
       }
     }
-    // 4. Go
+
+    // -------------------------------------------------------------
+    // 4. Go Ecosystem
+    // -------------------------------------------------------------
     else if (ecosystem === "go") {
-      const goCmd = fixedVersion
-        ? `go get ${packageName}@${fixedVersion}`
-        : `go get -u ${packageName}`;
+      // First, directly update go.mod if present
+      const goModFile = path.join(projectDir, "go.mod");
+      let goModModified = false;
       try {
-        await execAsync(goCmd, { cwd: projectDir, timeout: 45000 });
-        executedCommands.push(`${goCmd} (${projName})`);
-        projectsUpdated.push(projName);
-      } catch (err: any) {
-        hadAnyFailure = true;
-        lastErrorMessage = err.stderr || err.message || `go get failed in ${projName}`;
+        const content = await fs.readFile(goModFile, "utf-8");
+        const lines = content.split("\n");
+        const cleanFixed = fixedVersion.replace(/^v/, "");
+
+        const updatedLines = lines.map((line) => {
+          if (line.includes(packageName)) {
+            // e.g. "require golang.org/x/image v0.19.0" or "golang.org/x/image v0.19.0 // indirect"
+            goModModified = true;
+            if (cleanFixed) {
+              return line.replace(/v\d+\.\d+\.\d+([-\w.]*)/, `v${cleanFixed}`);
+            }
+          }
+          return line;
+        });
+
+        if (goModModified) {
+          await fs.writeFile(goModFile, updatedLines.join("\n"), "utf-8");
+          projManifestUpdated = true;
+          updatedManifestAny = true;
+        }
+      } catch {
+        // go.mod not found
+      }
+
+      const hasGo = await isCommandAvailable("go");
+      if (hasGo) {
+        const cleanFixed = fixedVersion.replace(/^v/, "");
+        const goCmd = cleanFixed
+          ? `go get ${packageName}@v${cleanFixed}`
+          : `go get -u ${packageName}`;
+        try {
+          await execAsync(goCmd, { cwd: projectDir, timeout: 45000 });
+          executedCommands.push(`${goCmd} (${projName})`);
+          projectsUpdated.push(projName);
+        } catch (err: any) {
+          if (projManifestUpdated) {
+            executedCommands.push(`go.mod updated to v${cleanFixed} (${projName})`);
+            projectsUpdated.push(projName);
+          } else {
+            hadAnyFailure = true;
+            lastErrorMessage = err.stderr || err.message || `go get failed in ${projName}`;
+          }
+        }
+      } else {
+        if (projManifestUpdated) {
+          const cleanFixed = fixedVersion.replace(/^v/, "");
+          executedCommands.push(`go.mod pinned to v${cleanFixed} [Go CLI not installed on host] (${projName})`);
+          projectsUpdated.push(projName);
+        } else {
+          hadAnyFailure = true;
+          lastErrorMessage = `Go toolchain is not installed on host system ('sudo pacman -S go' recommended).`;
+        }
       }
     }
-    // 5. Custom Command
+
+    // -------------------------------------------------------------
+    // 5. Fallback or Custom Command
+    // -------------------------------------------------------------
     else if (customCommand) {
       try {
         await execAsync(customCommand, { cwd: projectDir, timeout: 45000 });
@@ -202,13 +399,29 @@ async function remediateSingleItem(
     }
   }
 
-  const success = !hadAnyFailure || projectsUpdated.length > 0;
+  const success = projectsUpdated.length > 0 || updatedManifestAny;
+  let finalMessage = "";
+  if (success) {
+    let toolchainNotice = "";
+    if (ecosystem === "go" && !(await isCommandAvailable("go"))) {
+      toolchainNotice = " (manifest pinned; Go CLI not installed on host — 'sudo pacman -S go' recommended)";
+    } else if ((ecosystem === "pip" || ecosystem === "pypi") && !(await isCommandAvailable("pip"))) {
+      toolchainNotice = " (manifest pinned; pip not installed on host — 'sudo pacman -S python-pip' recommended)";
+    } else if ((ecosystem === "cargo" || ecosystem === "rust") && !(await isCommandAvailable("cargo"))) {
+      toolchainNotice = " (manifest pinned; cargo not installed on host — 'sudo pacman -S rust' recommended)";
+    } else if (updatedManifestAny) {
+      toolchainNotice = " (manifest pinned)";
+    }
+
+    finalMessage = `Updated ${packageName} in ${projectsUpdated.length} project(s)${toolchainNotice}.`;
+  } else {
+    finalMessage = lastErrorMessage || `Failed to update ${packageName}.`;
+  }
+
   return {
     package_name: packageName,
     success,
-    message: success
-      ? `Updated ${packageName} in ${projectsUpdated.length} project(s)${updatedManifestAny ? " (manifest pinned)" : ""}.`
-      : lastErrorMessage || `Failed to update ${packageName}.`,
+    message: finalMessage,
     executed_commands: executedCommands,
     projects_updated: projectsUpdated,
     updated_manifest: updatedManifestAny,
@@ -256,7 +469,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Trigger security scan ONCE at the end of the batch
-    await triggerSecurityScan();
+    try {
+      await triggerSecurityScan();
+    } catch {
+      // Non-fatal if scan fails
+    }
 
     const succeededCount = results.filter((r) => r.success).length;
     const failedCount = results.filter((r) => !r.success).length;
@@ -282,6 +499,6 @@ export async function POST(req: NextRequest) {
       results,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
   }
 }
