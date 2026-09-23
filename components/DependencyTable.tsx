@@ -14,6 +14,9 @@ import {
   RefreshCw,
   Terminal,
   Globe,
+  HardDrive,
+  Layers,
+  Sparkles,
 } from "lucide-react";
 
 interface DependencyTableProps {
@@ -29,8 +32,10 @@ export default function DependencyTable({
 }: DependencyTableProps) {
   const [query, setQuery] = useState("");
   const [selectedType, setSelectedType] = useState("all");
-  const [selectedStatus, setSelectedStatus] = useState<"all" | "missing" | "installed">(
-    initialStatus === "missing" ? "missing" : "all"
+  const [selectedStatus, setSelectedStatus] = useState<"all" | "missing" | "installed" | "shared">(
+    initialStatus === "missing" || initialStatus === "shared" || initialStatus === "installed"
+      ? (initialStatus as "all" | "missing" | "installed" | "shared")
+      : "all"
   );
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
 
@@ -41,8 +46,13 @@ export default function DependencyTable({
   const [feedback, setFeedback] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
 
   useEffect(() => {
-    if (initialStatus === "missing" || initialStatus === "installed" || initialStatus === "all") {
-      setSelectedStatus(initialStatus as "all" | "missing" | "installed");
+    if (
+      initialStatus === "missing" ||
+      initialStatus === "installed" ||
+      initialStatus === "shared" ||
+      initialStatus === "all"
+    ) {
+      setSelectedStatus(initialStatus as "all" | "missing" | "installed" | "shared");
     }
   }, [initialStatus]);
 
@@ -50,6 +60,7 @@ export default function DependencyTable({
 
   const missingPackages = packages.filter((p) => !p.installed);
   const installedPackages = packages.filter((p) => p.installed);
+  const sharedPackages = packages.filter((p) => p.required_by && p.required_by.length >= 2);
 
   const filtered = packages.filter((pkg) => {
     const matchesType =
@@ -57,12 +68,17 @@ export default function DependencyTable({
     const matchesStatus =
       selectedStatus === "all" ||
       (selectedStatus === "missing" && !pkg.installed) ||
-      (selectedStatus === "installed" && pkg.installed);
+      (selectedStatus === "installed" && pkg.installed) ||
+      (selectedStatus === "shared" && pkg.required_by && pkg.required_by.length >= 2);
     const matchesQuery =
       pkg.name.toLowerCase().includes(query.toLowerCase()) ||
       pkg.required_by.some((req) => req.toLowerCase().includes(query.toLowerCase()));
     return matchesType && matchesStatus && matchesQuery;
   });
+
+  if (selectedStatus === "shared") {
+    filtered.sort((a, b) => (b.required_by?.length || 0) - (a.required_by?.length || 0));
+  }
 
   const handleCopy = (cmd: string, id: string) => {
     navigator.clipboard.writeText(cmd);
@@ -237,6 +253,76 @@ export default function DependencyTable({
         </div>
       )}
 
+      {/* Space Saver & Global Hosting Banner */}
+      {selectedStatus === "shared" && (
+        <div className="p-5 rounded-xl border border-[#83a598]/40 bg-[#32302f] space-y-3 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-[#83a598]/15 border border-[#83a598]/30 text-[#83a598] text-xs font-mono font-medium">
+                <HardDrive className="w-3.5 h-3.5" />
+                <span>Drive Space Optimizer &amp; Global Host</span>
+              </div>
+              <h3 className="text-base font-bold text-[#fbf1c7] tracking-tight">
+                Migrate Repeated Dependencies &amp; Host 1 Copy Globally
+              </h3>
+              <p className="text-xs text-[#a89984] max-w-2xl leading-relaxed">
+                Found <strong className="text-[#ebdbb2]">{sharedPackages.length} packages</strong> duplicated across separate workspace project directories. You can host 1 global copy to reclaim drive space using the workflows below:
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-xs font-mono">
+            {/* Strategy 1: Global Tooling */}
+            <div className="p-3.5 rounded-lg bg-[#282828] border border-[#3c3836] space-y-1.5">
+              <div className="flex items-center space-x-1.5 text-[#83a598] font-bold">
+                <Globe className="w-4 h-4" />
+                <span>1. Global CLI Tools</span>
+              </div>
+              <p className="text-[11px] text-[#a89984] leading-relaxed">
+                Install shared devtools (<code className="text-[#ebdbb2]">typescript</code>, <code className="text-[#ebdbb2]">next</code>, <code className="text-[#ebdbb2]">eslint</code>) on the host system to run across any workspace without local duplicate copies.
+              </p>
+              <div className="pt-1">
+                <code className="text-[10px] text-[#b8bb26] bg-[#1d2021] px-2 py-1 rounded block truncate">
+                  bun add -g &lt;package&gt;
+                </code>
+              </div>
+            </div>
+
+            {/* Strategy 2: Global Linking */}
+            <div className="p-3.5 rounded-lg bg-[#282828] border border-[#3c3836] space-y-1.5">
+              <div className="flex items-center space-x-1.5 text-[#fabd2f] font-bold">
+                <Layers className="w-4 h-4" />
+                <span>2. Global Symlinking</span>
+              </div>
+              <p className="text-[11px] text-[#a89984] leading-relaxed">
+                Link a single global package install into individual project <code className="text-[#ebdbb2]">node_modules</code> via symlinks, keeping 1 true copy on your drive.
+              </p>
+              <div className="pt-1">
+                <code className="text-[10px] text-[#fabd2f] bg-[#1d2021] px-2 py-1 rounded block truncate">
+                  bun link &lt;package&gt;
+                </code>
+              </div>
+            </div>
+
+            {/* Strategy 3: Central Store (pnpm / uv) */}
+            <div className="p-3.5 rounded-lg bg-[#282828] border border-[#3c3836] space-y-1.5">
+              <div className="flex items-center space-x-1.5 text-[#b8bb26] font-bold">
+                <Sparkles className="w-4 h-4" />
+                <span>3. Content-Addressed Store</span>
+              </div>
+              <p className="text-[11px] text-[#a89984] leading-relaxed">
+                Using <code className="text-[#ebdbb2]">pnpm</code> or Python <code className="text-[#ebdbb2]">uv</code> stores 1 immutable copy in <code className="text-[#ebdbb2]">~/.local/share/pnpm/store</code> and hardlinks to all projects (0 duplicated bytes!).
+              </p>
+              <div className="pt-1">
+                <code className="text-[10px] text-[#b8bb26] bg-[#1d2021] px-2 py-1 rounded block truncate">
+                  pnpm import / uv sync
+                </code>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Table Card */}
       <div className="bg-[#32302f] border border-[#504945] rounded-xl overflow-hidden">
         {/* Search & Filter Bar */}
@@ -253,7 +339,7 @@ export default function DependencyTable({
           </div>
 
           {/* Status Tabs */}
-          <div className="flex items-center space-x-1.5 shrink-0">
+          <div className="flex items-center space-x-1.5 shrink-0 flex-wrap gap-y-1">
             <button
               onClick={() => setSelectedStatus("all")}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer ${
@@ -263,6 +349,26 @@ export default function DependencyTable({
               }`}
             >
               ALL ({packages.length})
+            </button>
+            <button
+              onClick={() => setSelectedStatus("shared")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer flex items-center space-x-1.5 ${
+                selectedStatus === "shared"
+                  ? "bg-[#83a598] text-[#1d2021] font-bold"
+                  : "bg-[#83a598]/15 text-[#83a598] border border-[#83a598]/40 hover:bg-[#83a598]/25"
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>SHARED / SPACE SAVER</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                  selectedStatus === "shared"
+                    ? "bg-[#1d2021] text-[#83a598]"
+                    : "bg-[#83a598] text-[#1d2021]"
+                }`}
+              >
+                {sharedPackages.length}
+              </span>
             </button>
             <button
               onClick={() => setSelectedStatus("missing")}
