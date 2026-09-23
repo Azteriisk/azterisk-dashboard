@@ -31,6 +31,7 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
   const isUpToDate = watch.status === "up_to_date";
   const isUpdateAvailable = watch.status === "update_available";
   const isMissing = watch.status === "diverged" || watch.installed_version === "Not installed";
+  const isAuthorTracking = Boolean(watch.author_repo);
 
   const handleCopy = (cmd: string) => {
     navigator.clipboard.writeText(cmd);
@@ -41,12 +42,16 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
   const handleAction = async () => {
     if (!watch.action_command) return;
 
-    // If it's a multi-step cd + makepkg script, copying to terminal is the safest and expected flow
-    if (watch.action_command.includes("makepkg") || watch.action_command.includes("cd ")) {
+    // If it's a multi-step cd + makepkg or git command, copying to terminal is the safest and expected flow
+    if (
+      watch.action_command.includes("makepkg") ||
+      watch.action_command.includes("cd ") ||
+      watch.action_command.includes("git ")
+    ) {
       handleCopy(watch.action_command);
       setFeedback({
         type: "warn",
-        text: "Command copied! Run in terminal to build the local fork package.",
+        text: "Command copied! Run in terminal to inspect author changes.",
       });
       setTimeout(() => setFeedback(null), 4000);
       return;
@@ -95,7 +100,9 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
         isUpdateAvailable
           ? "bg-[#32302f] border-[#fabd2f]/50 hover:border-[#fabd2f]"
           : isUpToDate
-          ? "bg-[#32302f] border-[#504945] hover:border-[#665c54]"
+          ? isAuthorTracking
+            ? "bg-[#32302f] border-[#504945] hover:border-[#83a598]/60"
+            : "bg-[#32302f] border-[#504945] hover:border-[#665c54]"
           : "bg-[#32302f] border-[#fb4934]/50 hover:border-[#fb4934]"
       }`}
     >
@@ -107,20 +114,22 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
                 isUpdateAvailable
                   ? "bg-[#fabd2f]/15 text-[#fabd2f] border-[#fabd2f]/30"
                   : isUpToDate
-                  ? "bg-[#b8bb26]/15 text-[#b8bb26] border-[#b8bb26]/30"
+                  ? isAuthorTracking
+                    ? "bg-[#83a598]/15 text-[#83a598] border-[#83a598]/30"
+                    : "bg-[#b8bb26]/15 text-[#b8bb26] border-[#b8bb26]/30"
                   : "bg-[#fb4934]/15 text-[#fb4934] border-[#fb4934]/30"
               }`}
             >
               {isUpdateAvailable ? (
-                watch.is_ahead ? (
-                  <GitBranch className="w-5 h-5 text-[#fabd2f]" />
-                ) : (
-                  <ArrowUpCircle className="w-5 h-5" />
-                )
+                <ArrowUpCircle className="w-5 h-5 text-[#fabd2f]" />
               ) : isUpToDate ? (
-                <ShieldCheck className="w-5 h-5" />
+                isAuthorTracking ? (
+                  <GitBranch className="w-5 h-5 text-[#83a598]" />
+                ) : (
+                  <ShieldCheck className="w-5 h-5 text-[#b8bb26]" />
+                )
               ) : (
-                <AlertTriangle className="w-5 h-5" />
+                <AlertTriangle className="w-5 h-5 text-[#fb4934]" />
               )}
             </div>
             <div className="min-w-0 flex-1">
@@ -139,15 +148,22 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
           {/* Status Badge */}
           <div className="shrink-0 pt-0.5">
             {isUpToDate ? (
-              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#b8bb26]/15 text-[#b8bb26] border border-[#b8bb26]/30 whitespace-nowrap">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Compatible</span>
-              </span>
-            ) : isUpdateAvailable ? (
-              watch.is_ahead ? (
-                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#fabd2f]/15 text-[#fabd2f] border border-[#fabd2f]/30 whitespace-nowrap">
+              isAuthorTracking ? (
+                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#83a598]/15 text-[#83a598] border border-[#83a598]/30 whitespace-nowrap">
                   <GitBranch className="w-3.5 h-3.5" />
-                  <span>Local Fork Ahead</span>
+                  <span>Author Idle (Fork Ahead)</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#b8bb26]/15 text-[#b8bb26] border border-[#b8bb26]/30 whitespace-nowrap">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Compatible</span>
+                </span>
+              )
+            ) : isUpdateAvailable ? (
+              isAuthorTracking ? (
+                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#fabd2f]/15 text-[#fabd2f] border border-[#fabd2f]/30 whitespace-nowrap">
+                  <ArrowUpCircle className="w-3.5 h-3.5" />
+                  <span>Author Updated</span>
                 </span>
               ) : (
                 <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#fabd2f]/15 text-[#fabd2f] border border-[#fabd2f]/30 whitespace-nowrap">
@@ -173,10 +189,16 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
             </span>
           </div>
           <div className="bg-[#282828] p-2.5 rounded-lg border border-[#3c3836]">
-            <span className="text-[#a89984] block text-[11px] font-mono">UPSTREAM</span>
+            <span className="text-[#a89984] block text-[11px] font-mono">
+              {isAuthorTracking ? "AUTHOR HEAD" : "UPSTREAM"}
+            </span>
             <span
               className={`font-mono font-semibold ${
-                isUpdateAvailable ? "text-[#fabd2f]" : "text-[#ebdbb2]"
+                isUpdateAvailable
+                  ? "text-[#fabd2f]"
+                  : isAuthorTracking
+                  ? "text-[#83a598]"
+                  : "text-[#ebdbb2]"
               }`}
             >
               {watch.upstream_version}
@@ -202,23 +224,31 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
               workspace project(s)
             </span>
           </span>
-          {isUpdateAvailable && (
-            <span className="text-[#fabd2f] font-mono text-[10px]">
-              {watch.is_ahead ? "Custom Wayland fork" : "Test plugins before updating"}
+          {isAuthorTracking ? (
+            <span className="text-[#83a598] font-mono text-[10px]">
+              {watch.author_ahead ? "Author pushed new commits" : "Author has 0 new commits"}
             </span>
-          )}
+          ) : isUpdateAvailable ? (
+            <span className="text-[#fabd2f] font-mono text-[10px]">Test plugins before updating</span>
+          ) : null}
         </div>
       </div>
 
-      {/* Action Banner for Yellow & Red Alerts */}
-      {!isUpToDate && watch.action_command && (
+      {/* Action Banner for Non-Up-To-Date or Author Tracking */}
+      {watch.action_command && (!isUpToDate || isAuthorTracking) && (
         <div className="mt-4 pt-3 border-t border-[#3c3836] space-y-2">
           <div className="flex items-center justify-between text-[11px]">
             <span className="text-[#ebdbb2] font-medium flex items-center space-x-1.5">
-              <Terminal className="w-3.5 h-3.5 text-[#fe8019]" />
+              {isAuthorTracking ? (
+                <GitBranch className="w-3.5 h-3.5 text-[#83a598]" />
+              ) : (
+                <Terminal className="w-3.5 h-3.5 text-[#fe8019]" />
+              )}
               <span>
-                {watch.is_ahead
-                  ? "Local fork has custom commits ahead of AUR:"
+                {isAuthorTracking
+                  ? watch.author_ahead
+                    ? `Author (${watch.author_repo}) pushed new commits:`
+                    : `Tracking author repo (${watch.author_repo}):`
                   : isMissing
                   ? "Dependency missing from system:"
                   : "Recommended update command:"}
@@ -241,7 +271,12 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
 
           {/* Command Pill */}
           <div className="flex items-center justify-between bg-[#1d2021] border border-[#3c3836] rounded-lg px-3 py-2 font-mono text-xs">
-            <code className="text-[#b8bb26] truncate mr-2" title={watch.action_command}>
+            <code
+              className={`truncate mr-2 ${
+                isAuthorTracking ? "text-[#83a598]" : "text-[#b8bb26]"
+              }`}
+              title={watch.action_command}
+            >
               {watch.action_command}
             </code>
             <button
@@ -261,6 +296,8 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
               className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-mono font-semibold transition cursor-pointer flex items-center justify-center space-x-1.5 ${
                 isMissing
                   ? "bg-[#fb4934] hover:bg-[#fb4934]/90 text-[#1d2021]"
+                  : isAuthorTracking
+                  ? "bg-[#83a598] hover:bg-[#83a598]/90 text-[#1d2021]"
                   : "bg-[#fe8019] hover:bg-[#fe8019]/90 text-[#1d2021]"
               } disabled:opacity-50`}
             >
@@ -270,7 +307,14 @@ export default function CriticalWatchCard({ watch, onRefresh }: CriticalWatchCar
                   <span>Executing...</span>
                 </>
               ) : (
-                <span>{watch.action_label || (isMissing ? "Install Package" : "Update Package")}</span>
+                <span>
+                  {watch.action_label ||
+                    (isMissing
+                      ? "Install Package"
+                      : isAuthorTracking
+                      ? "Check Author Commits"
+                      : "Update Package")}
+                </span>
               )}
             </button>
 

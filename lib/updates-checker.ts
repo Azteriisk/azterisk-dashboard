@@ -85,6 +85,58 @@ export async function inspectPacmanLocal(pkgName: string): Promise<{
   }
 }
 
+export async function inspectUpstreamAuthor(pkgName: string, projectPath?: string): Promise<{
+  authorRepo: string;
+  authorSha: string;
+  authorBranch: string;
+  hasNewAuthorCommits: boolean;
+  actionCommand: string;
+} | null> {
+  if (!isLocalEnvironment()) return null;
+
+  let dir = projectPath;
+  if (!dir) {
+    const candidateName = pkgName.replace(/-git$/, "");
+    dir = `/home/azterisk/Projects/${candidateName}`;
+  }
+
+  try {
+    const { stdout: upstreamUrl } = await execAsync(
+      `git -C "${dir}" remote get-url upstream 2>/dev/null`
+    );
+    if (!upstreamUrl.trim()) return null;
+
+    const { stdout: lsRemoteOut } = await execAsync(
+      `git -C "${dir}" ls-remote upstream refs/heads/main 2>/dev/null || git -C "${dir}" ls-remote upstream refs/heads/master 2>/dev/null`,
+      { timeout: 5000 }
+    );
+    const parts = lsRemoteOut.trim().split(/\s+/);
+    if (!parts || !parts[0]) return null;
+
+    const authorSha = parts[0];
+    const branch = parts[1]?.replace("refs/heads/", "") || "main";
+
+    // Check if user's local HEAD contains the author's commit
+    let isAncestor = false;
+    try {
+      await execAsync(`git -C "${dir}" merge-base --is-ancestor ${authorSha} HEAD 2>/dev/null`);
+      isAncestor = true;
+    } catch {
+      isAncestor = false;
+    }
+
+    return {
+      authorRepo: upstreamUrl.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, ""),
+      authorSha: authorSha.substring(0, 8),
+      authorBranch: branch,
+      hasNewAuthorCommits: !isAncestor,
+      actionCommand: `git -C ${dir} fetch upstream && git -C ${dir} log HEAD..upstream/${branch}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function compareVersions(v1: string, v2: string): Promise<number> {
   if (v1 === v2) return 0;
   if (isLocalEnvironment()) {
@@ -161,28 +213,47 @@ export async function getCriticalWatchList(
       }
     }
 
+    // Check if this package has an upstream author repo (e.g. user fork tracking upstream author)
+    const authorInfo = await inspectUpstreamAuthor(name);
+
     let status: "up_to_date" | "update_available" | "diverged" = "up_to_date";
     let isAhead = false;
     let actionLabel: string | undefined = undefined;
     let actionCommand: string | undefined = undefined;
+    let authorRepo: string | undefined = undefined;
+    let authorAhead = false;
 
-    if (installedVer === "Not installed") {
+    if (authorInfo) {
+      authorRepo = authorInfo.authorRepo;
+      upstreamVer = `${authorInfo.authorSha} (${authorInfo.authorRepo})`;
+
+      if (authorInfo.hasNewAuthorCommits) {
+        // Author actually pushed new commits
+        status = "update_available";
+        isAhead = false;
+        authorAhead = true;
+        actionLabel = "Inspect Author Commits";
+        actionCommand = authorInfo.actionCommand;
+      } else {
+        // Author has not updated; local fork is up-to-date and ahead
+        status = "up_to_date";
+        isAhead = true;
+        authorAhead = false;
+        actionLabel = "Check Author Commits";
+        actionCommand = authorInfo.actionCommand;
+      }
+    } else if (installedVer === "Not installed") {
       status = "diverged";
       actionLabel = "Install Package";
       actionCommand = `yay -S --needed ${name}`;
     } else if (upstreamVer && installedVer !== upstreamVer) {
       const cmp = await compareVersions(installedVer, upstreamVer);
       if (cmp > 0) {
-        // Installed is ahead of upstream (e.g. custom fork)
+        // Installed is ahead of upstream
         status = "update_available";
         isAhead = true;
-        if (name === "linux-wallpaperengine-git") {
-          actionLabel = "Rebuild Local Fork";
-          actionCommand = "cd ~/Projects/linux-wallpaperengine/packaging/archlinux && makepkg -si";
-        } else {
-          actionLabel = "Rebuild Local Fork";
-          actionCommand = `yay -S --needed ${name}`;
-        }
+        actionLabel = "Rebuild Local Fork";
+        actionCommand = `yay -S --needed ${name}`;
       } else if (cmp < 0) {
         status = "update_available";
         isAhead = false;
@@ -194,7 +265,11 @@ export async function getCriticalWatchList(
     }
 
     let desc = "";
-    if (name === "omarchy") {
+    if (authorInfo) {
+      desc = authorInfo.hasNewAuthorCommits
+        ? `New commits detected from upstream author (${authorInfo.authorRepo})!`
+        : `Tracking author (${authorInfo.authorRepo}). Local fork is ahead with custom Wayland/mpv fixes.`;
+    } else if (name === "omarchy") {
       desc = "Omarchy Core Desktop Shell framework. Required for all Quattro plugins.";
     } else if (name === "hyprland") {
       desc = "Wayland Dynamic Tiling Compositor. Compositor protocol and layer shell foundation.";
@@ -223,6 +298,8 @@ export async function getCriticalWatchList(
       action_command: actionCommand,
       action_label: actionLabel,
       is_ahead: isAhead,
+      author_repo: authorRepo,
+      author_ahead: authorAhead,
     });
   }
 

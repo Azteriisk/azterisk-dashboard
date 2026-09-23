@@ -52,6 +52,8 @@ export interface CriticalWatch {
   action_command?: string;
   action_label?: string;
   is_ahead?: boolean;
+  author_repo?: string;
+  author_ahead?: boolean;
 }
 
 export interface Vulnerability {
