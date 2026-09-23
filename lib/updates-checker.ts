@@ -1,7 +1,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import { CatalogData, CriticalWatch, Package } from "./types";
-import { isLocalEnvironment } from "./catalog";
+import { isLocalEnvironment, getCatalogConfig } from "./catalog";
 
 const execAsync = promisify(exec);
 
@@ -85,8 +85,26 @@ export async function inspectPacmanLocal(pkgName: string): Promise<{
   }
 }
 
-export async function getCriticalWatchList(catalog: CatalogData): Promise<CriticalWatch[]> {
-  const watchNames = ["omarchy", "hyprland", "quickshell", "linux-wallpaperengine-git"];
+export async function getCriticalWatchList(
+  catalog: CatalogData,
+  customWatchNames?: string[]
+): Promise<CriticalWatch[]> {
+  let watchNames = customWatchNames;
+  if (!watchNames || watchNames.length === 0) {
+    try {
+      const config = await getCatalogConfig();
+      if (config.critical_watch_packages && config.critical_watch_packages.length > 0) {
+        watchNames = config.critical_watch_packages;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  if (!watchNames || watchNames.length === 0) {
+    watchNames = ["omarchy", "hyprland", "quickshell", "linux-wallpaperengine-git"];
+  }
+
   const aurResults = await fetchAurInfo(watchNames);
 
   const results: CriticalWatch[] = [];
@@ -145,6 +163,12 @@ export async function getCriticalWatchList(catalog: CatalogData): Promise<Critic
       desc = "QML Desktop Shell runtime engine for widgets, panels, and services.";
     } else if (name === "linux-wallpaperengine-git") {
       desc = "Wayland-native Wallpaper Engine fork backend rendering engine.";
+    } else if (pkg?.description) {
+      desc = pkg.description;
+    } else if (aurResults[name]?.Description) {
+      desc = aurResults[name].Description;
+    } else {
+      desc = "Monitored workspace dependency";
     }
 
     results.push({

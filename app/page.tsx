@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   Sparkles,
   Layers,
+  Sliders,
 } from "lucide-react";
 
 export const revalidate = 0;
@@ -77,16 +78,23 @@ export default async function DashboardPage() {
 
       {/* Critical Dependency Radar */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
-              <ShieldAlert className="w-5 h-5 text-blue-400" />
-              <span>Critical Dependency Radar</span>
+              <ShieldAlert className="w-5 h-5 text-purple-400" />
+              <span>Tracked Package Radar</span>
             </h2>
             <p className="text-xs text-gray-400">
-              Actively inspected core frameworks to prevent plugin compatibility faults
+              Actively inspected core frameworks and dependencies to prevent compatibility faults
             </p>
           </div>
+          <Link
+            href="/settings"
+            className="inline-flex items-center space-x-1.5 text-xs text-purple-400 hover:text-purple-300 font-medium px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 hover:border-purple-500/40 transition w-fit"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Edit Tracked Packages</span>
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
