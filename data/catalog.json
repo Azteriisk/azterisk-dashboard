@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-09-23T02:51:10.019027+00:00",
+  "updated_at": "2026-09-23T03:20:01.548459+00:00",
   "projects": {
     "Blazor-.NET-Test": {
       "name": "Blazor-.NET-Test",
@@ -957,6 +957,72 @@
       "is_drifted": false,
       "srcinfo_synchronized": false
     },
+    "azterisk-catalog": {
+      "name": "azterisk-catalog",
+      "path": "/home/azterisk/Projects/azterisk-catalog",
+      "project_type": "arch-pkg",
+      "ecosystem": "arch",
+      "manifest_id": null,
+      "manifest_version": null,
+      "manifest_kinds": [],
+      "pkgname": "omarchy-catalog-git",
+      "pkgver": "1.0.0",
+      "pkgbuild_path": "/home/azterisk/Projects/azterisk-catalog/PKGBUILD",
+      "srcinfo_path": null,
+      "depends": [
+        "python",
+        "pacman"
+      ],
+      "makedepends": [
+        "git"
+      ],
+      "optdepends": [],
+      "commit_pin": null,
+      "git_head": "97c87192c9070792bd1e3b00ec8e095fc2e0dc88",
+      "git_branch": "master",
+      "git_dirty": true,
+      "is_pinned": false,
+      "is_drifted": false,
+      "srcinfo_synchronized": false
+    },
+    "azterisk-dashboard": {
+      "name": "azterisk-dashboard",
+      "path": "/home/azterisk/Projects/azterisk-dashboard",
+      "project_type": "node-pkg",
+      "ecosystem": "node",
+      "manifest_id": null,
+      "manifest_version": null,
+      "manifest_kinds": [],
+      "pkgname": null,
+      "pkgver": null,
+      "pkgbuild_path": null,
+      "srcinfo_path": null,
+      "depends": [
+        "clsx",
+        "lucide-react",
+        "next",
+        "react",
+        "react-dom",
+        "tailwind-merge"
+      ],
+      "makedepends": [
+        "@tailwindcss/postcss",
+        "@types/node",
+        "@types/react",
+        "@types/react-dom",
+        "postcss",
+        "tailwindcss",
+        "typescript"
+      ],
+      "optdepends": [],
+      "commit_pin": null,
+      "git_head": "9218618bc6584ffae83b8ea0cb7caa6c8b9be241",
+      "git_branch": "main",
+      "git_dirty": true,
+      "is_pinned": false,
+      "is_drifted": false,
+      "srcinfo_synchronized": false
+    },
     "azterisk-net": {
       "name": "azterisk-net",
       "path": "/home/azterisk/code/azterisk-net",
@@ -1618,34 +1684,6 @@
       "is_pinned": true,
       "is_drifted": true,
       "srcinfo_synchronized": true
-    },
-    "omarchy-catalog": {
-      "name": "omarchy-catalog",
-      "path": "/home/azterisk/Projects/omarchy-catalog",
-      "project_type": "arch-pkg",
-      "ecosystem": "arch",
-      "manifest_id": null,
-      "manifest_version": null,
-      "manifest_kinds": [],
-      "pkgname": "omarchy-catalog-git",
-      "pkgver": "1.0.0",
-      "pkgbuild_path": "/home/azterisk/Projects/omarchy-catalog/PKGBUILD",
-      "srcinfo_path": null,
-      "depends": [
-        "python",
-        "pacman"
-      ],
-      "makedepends": [
-        "git"
-      ],
-      "optdepends": [],
-      "commit_pin": null,
-      "git_head": "83a66af51257427a8985556ebacb7cb2ea63f072",
-      "git_branch": "master",
-      "git_dirty": true,
-      "is_pinned": false,
-      "is_drifted": false,
-      "srcinfo_synchronized": false
     },
     "omarchy-display-manager": {
       "name": "omarchy-display-manager",
@@ -2782,6 +2820,7 @@
       "name": "@tailwindcss/postcss",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "PseudoIDE",
         "UnknownFouriers",
         "azterisk",
@@ -2789,6 +2828,7 @@
         "terminal-emulator"
       ],
       "usage": {
+        "azterisk-dashboard": "makedepends",
         "PseudoIDE": "makedepends",
         "UnknownFouriers": "makedepends",
         "azterisk": "makedepends",
@@ -3013,6 +3053,7 @@
       "name": "@types/node",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "CareerReport",
         "MoreDynamic",
         "PatentFlow",
@@ -3030,6 +3071,7 @@
         "terminal-emulator"
       ],
       "usage": {
+        "azterisk-dashboard": "makedepends",
         "CareerReport": "makedepends",
         "MoreDynamic": "makedepends",
         "PatentFlow": "makedepends",
@@ -3067,6 +3109,7 @@
       "name": "@types/react",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "CareerReport",
         "MoreDynamic",
         "PatentFlow",
@@ -3086,6 +3129,7 @@
         "terminal-emulator"
       ],
       "usage": {
+        "azterisk-dashboard": "makedepends",
         "CareerReport": "makedepends",
         "MoreDynamic": "makedepends",
         "PatentFlow": "makedepends",
@@ -3112,6 +3156,7 @@
       "name": "@types/react-dom",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "CareerReport",
         "MoreDynamic",
         "PatentFlow",
@@ -3131,6 +3176,7 @@
         "terminal-emulator"
       ],
       "usage": {
+        "azterisk-dashboard": "makedepends",
         "CareerReport": "makedepends",
         "MoreDynamic": "makedepends",
         "PatentFlow": "makedepends",
@@ -3490,12 +3536,14 @@
       "name": "clsx",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "admin-dashboard",
         "azterisk",
         "azterisk-net",
         "makerspace"
       ],
       "usage": {
+        "azterisk-dashboard": "depends",
         "admin-dashboard": "depends",
         "azterisk": "depends",
         "azterisk-net": "depends",
@@ -3944,9 +3992,9 @@
       "name": "git",
       "pkg_type": "pacman",
       "required_by": [
+        "azterisk-catalog",
         "linux-wallpaperengine",
         "omarchy-boot-manager",
-        "omarchy-catalog",
         "omarchy-display-manager",
         "omarchy-games",
         "omarchy-idle-manager",
@@ -3956,9 +4004,9 @@
         "omarchy-window-minimize"
       ],
       "usage": {
+        "azterisk-catalog": "makedepends",
         "linux-wallpaperengine": "makedepends",
         "omarchy-boot-manager": "makedepends",
-        "omarchy-catalog": "makedepends",
         "omarchy-display-manager": "makedepends",
         "omarchy-games": "makedepends",
         "omarchy-idle-manager": "makedepends",
@@ -4407,6 +4455,7 @@
       "name": "lucide-react",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "CareerReport",
         "PatentFlow",
         "PseudoIDE",
@@ -4418,6 +4467,7 @@
         "makerspace"
       ],
       "usage": {
+        "azterisk-dashboard": "depends",
         "CareerReport": "depends",
         "PatentFlow": "depends",
         "PseudoIDE": "depends",
@@ -4501,6 +4551,7 @@
       "name": "next",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "CareerReport",
         "MoreDynamic",
         "T3DriveThing",
@@ -4514,6 +4565,7 @@
         "terminal-emulator"
       ],
       "usage": {
+        "azterisk-dashboard": "depends",
         "CareerReport": "depends",
         "MoreDynamic": "depends",
         "T3DriveThing": "depends",
@@ -4614,10 +4666,10 @@
       "name": "pacman",
       "pkg_type": "pacman",
       "required_by": [
-        "omarchy-catalog"
+        "azterisk-catalog"
       ],
       "usage": {
-        "omarchy-catalog": "depends"
+        "azterisk-catalog": "depends"
       },
       "installed": true,
       "installed_version": "7.1.0.r9.g54d9411-2",
@@ -4666,6 +4718,7 @@
       "name": "postcss",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "PseudoIDE",
         "T3DriveThing",
         "admin-dashboard",
@@ -4674,6 +4727,7 @@
         "quickswitch-ui"
       ],
       "usage": {
+        "azterisk-dashboard": "makedepends",
         "PseudoIDE": "makedepends",
         "T3DriveThing": "makedepends",
         "admin-dashboard": "depends",
@@ -4730,16 +4784,16 @@
       "name": "python",
       "pkg_type": "pacman",
       "required_by": [
+        "azterisk-catalog",
         "omarchy-boot-manager",
-        "omarchy-catalog",
         "omarchy-display-manager",
         "omarchy-dlss",
         "omarchy-games",
         "omarchy-menu"
       ],
       "usage": {
+        "azterisk-catalog": "depends",
         "omarchy-boot-manager": "depends",
-        "omarchy-catalog": "depends",
         "omarchy-display-manager": "depends",
         "omarchy-dlss": "depends",
         "omarchy-games": "depends",
@@ -4838,6 +4892,7 @@
       "name": "react",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "CareerReport",
         "MoreDynamic",
         "PatentFlow",
@@ -4858,6 +4913,7 @@
         "terminal-emulator"
       ],
       "usage": {
+        "azterisk-dashboard": "depends",
         "CareerReport": "depends",
         "MoreDynamic": "depends",
         "PatentFlow": "depends",
@@ -4885,6 +4941,7 @@
       "name": "react-dom",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "CareerReport",
         "MoreDynamic",
         "PatentFlow",
@@ -4905,6 +4962,7 @@
         "terminal-emulator"
       ],
       "usage": {
+        "azterisk-dashboard": "depends",
         "CareerReport": "depends",
         "MoreDynamic": "depends",
         "PatentFlow": "depends",
@@ -5155,12 +5213,14 @@
       "name": "tailwind-merge",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "admin-dashboard",
         "azterisk",
         "azterisk-net",
         "makerspace"
       ],
       "usage": {
+        "azterisk-dashboard": "depends",
         "admin-dashboard": "depends",
         "azterisk": "depends",
         "azterisk-net": "depends",
@@ -5174,6 +5234,7 @@
       "name": "tailwindcss",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "PseudoIDE",
         "T3DriveThing",
         "UnknownFouriers",
@@ -5185,6 +5246,7 @@
         "terminal-emulator"
       ],
       "usage": {
+        "azterisk-dashboard": "makedepends",
         "PseudoIDE": "makedepends",
         "T3DriveThing": "makedepends",
         "UnknownFouriers": "makedepends",
@@ -5309,6 +5371,7 @@
       "name": "typescript",
       "pkg_type": "npm",
       "required_by": [
+        "azterisk-dashboard",
         "CareerReport",
         "MoreDynamic",
         "PatentFlow",
@@ -5328,6 +5391,7 @@
         "terminal-emulator"
       ],
       "usage": {
+        "azterisk-dashboard": "makedepends",
         "CareerReport": "makedepends",
         "MoreDynamic": "makedepends",
         "PatentFlow": "makedepends",

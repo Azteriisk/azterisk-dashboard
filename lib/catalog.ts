@@ -6,8 +6,8 @@ import { CatalogData, CatalogConfig, WorkspaceStats } from "./types";
 
 const execAsync = promisify(exec);
 
-const LOCAL_CATALOG_PATH = "/home/azterisk/Projects/omarchy-catalog/catalog.json";
-const LOCAL_CONFIG_PATH = "/home/azterisk/Projects/omarchy-catalog/catalog-config.json";
+const LOCAL_CATALOG_PATH = "/home/azterisk/Projects/azterisk-catalog/catalog.json";
+const LOCAL_CONFIG_PATH = "/home/azterisk/Projects/azterisk-catalog/catalog-config.json";
 const BUNDLED_CATALOG_PATH = path.join(process.cwd(), "data", "catalog.json");
 const BUNDLED_CONFIG_PATH = path.join(process.cwd(), "data", "catalog-config.json");
 
@@ -132,7 +132,7 @@ export async function triggerRescan(): Promise<{ success: boolean; message: stri
     const config = await getCatalogConfig();
     const dirsArg = config.indexed_directories.join(",");
     const { stdout, stderr } = await execAsync(
-      `omarchy-catalog scan --projects-dir="${dirsArg}"`
+      `azterisk-catalog scan --projects-dir="${dirsArg}"`
     );
     return { success: true, message: stdout.trim() || stderr.trim() };
   } catch (err: any) {
@@ -149,7 +149,7 @@ export async function triggerSync(projectName?: string): Promise<{ success: bool
   }
 
   try {
-    const cmd = projectName ? `omarchy-catalog sync "${projectName}"` : `omarchy-catalog sync --all`;
+    const cmd = projectName ? `azterisk-catalog sync "${projectName}"` : `azterisk-catalog sync --all`;
     const { stdout, stderr } = await execAsync(cmd);
     return { success: true, message: stdout.trim() || stderr.trim() };
   } catch (err: any) {
