@@ -7,11 +7,8 @@ import {
   Package,
   AlertTriangle,
   GitCommit,
-  CheckCircle2,
-  ArrowRight,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
   Layers,
   Sliders,
 } from "lucide-react";
@@ -28,35 +25,34 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Hero Banner */}
-      <div className="relative rounded-3xl overflow-hidden p-8 border border-gray-800 bg-gradient-to-r from-gray-900/90 via-gray-900/60 to-blue-950/30 backdrop-blur-xl">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="rounded-2xl p-6 sm:p-7 border border-[#504945] bg-[#32302f] shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Workspace Dependency Intelligence</span>
+            <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded-md bg-[#3c3836] border border-[#504945] text-[#fe8019] text-xs font-mono font-medium">
+              <span>● Workspace Dependency Radar</span>
             </div>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">
-              Ecosystem Health & Dependency Radar
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#fbf1c7] tracking-tight">
+              Ecosystem Health & Package Radar
             </h1>
-            <p className="text-sm text-gray-400 max-w-2xl">
-              Real-time monitoring across <strong className="text-gray-200">{stats.total_projects} projects</strong> and{" "}
-              <strong className="text-gray-200">{stats.total_packages} tracked packages</strong> in your workspace.
+            <p className="text-xs sm:text-sm text-[#a89984] max-w-2xl leading-relaxed">
+              Monitoring <strong className="text-[#ebdbb2] font-semibold">{stats.total_projects} projects</strong> and{" "}
+              <strong className="text-[#ebdbb2] font-semibold">{stats.total_packages} unique packages</strong> across all indexed workspace directories.
             </p>
           </div>
 
           {/* Health Score Pill */}
-          <div className="flex items-center space-x-4 bg-gray-950/60 p-4 rounded-2xl border border-gray-800/80">
+          <div className="flex items-center space-x-4 bg-[#282828] p-4 rounded-xl border border-[#504945] shrink-0">
             <div className="relative w-16 h-16 flex items-center justify-center">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                 <path
-                  className="text-gray-800"
+                  className="text-[#3c3836]"
                   strokeWidth="3.5"
                   stroke="currentColor"
                   fill="none"
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                 />
                 <path
-                  className={stats.health_score > 80 ? "text-emerald-500" : stats.health_score > 60 ? "text-amber-500" : "text-red-500"}
+                  className={stats.health_score > 80 ? "text-[#b8bb26]" : stats.health_score > 60 ? "text-[#fabd2f]" : "text-[#fb4934]"}
                   strokeDasharray={`${stats.health_score}, 100`}
                   strokeWidth="3.5"
                   strokeLinecap="round"
@@ -65,13 +61,13 @@ export default async function DashboardPage() {
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                 />
               </svg>
-              <span className="absolute font-bold text-lg text-white font-mono">
+              <span className="absolute font-bold text-lg text-[#fbf1c7] font-mono">
                 {stats.health_score}%
               </span>
             </div>
             <div>
-              <span className="text-xs text-gray-400 block font-medium">Workspace Health</span>
-              <span className="text-sm font-bold text-white">
+              <span className="text-[11px] text-[#a89984] block font-mono">WORKSPACE HEALTH</span>
+              <span className="text-sm font-bold text-[#ebdbb2]">
                 {stats.health_score > 80 ? "Healthy" : stats.health_score > 60 ? "Needs Review" : "Attention"}
               </span>
             </div>
@@ -83,19 +79,19 @@ export default async function DashboardPage() {
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
-              <ShieldAlert className="w-5 h-5 text-purple-400" />
+            <h2 className="text-lg font-bold text-[#fbf1c7] tracking-tight flex items-center space-x-2">
+              <ShieldAlert className="w-5 h-5 text-[#fabd2f]" />
               <span>Tracked Package Radar</span>
             </h2>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-[#a89984]">
               Actively inspected core frameworks and dependencies to prevent compatibility faults
             </p>
           </div>
           <Link
             href="/settings"
-            className="inline-flex items-center space-x-1.5 text-xs text-purple-400 hover:text-purple-300 font-medium px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 hover:border-purple-500/40 transition w-fit"
+            className="inline-flex items-center space-x-1.5 text-xs text-[#ebdbb2] hover:text-[#fbf1c7] font-medium px-3 py-1.5 rounded-lg bg-[#3c3836] border border-[#504945] hover:border-[#665c54] hover:bg-[#504945] transition w-fit"
           >
-            <Sliders className="w-3.5 h-3.5" />
+            <Sliders className="w-3.5 h-3.5 text-[#fe8019]" />
             <span>Edit Tracked Packages</span>
           </Link>
         </div>
@@ -111,78 +107,78 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Link
           href="/projects"
-          className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition block group"
+          className="bg-[#32302f] border border-[#504945] hover:border-[#665c54] rounded-xl p-5 transition block group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-400">Total Projects</span>
-            <FolderGit2 className="w-4 h-4 text-blue-400 group-hover:translate-x-0.5 transition" />
+            <span className="text-xs font-medium text-[#a89984]">Total Projects</span>
+            <FolderGit2 className="w-4 h-4 text-[#83a598] group-hover:translate-x-0.5 transition" />
           </div>
-          <div className="mt-2 text-2xl font-bold text-white font-mono">{stats.total_projects}</div>
-          <span className="text-[11px] text-gray-500 mt-1 block">Indexed & tracked</span>
+          <div className="mt-2 text-2xl font-bold text-[#fbf1c7] font-mono">{stats.total_projects}</div>
+          <span className="text-[11px] text-[#928374] mt-1 block">Indexed & tracked</span>
         </Link>
 
         <Link
           href="/projects?status=drifted"
-          className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition block group"
+          className="bg-[#32302f] border border-[#504945] hover:border-[#665c54] rounded-xl p-5 transition block group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-400">Commit Pin Drifts</span>
-            <GitCommit className="w-4 h-4 text-amber-400 group-hover:translate-x-0.5 transition" />
+            <span className="text-xs font-medium text-[#a89984]">Commit Pin Drifts</span>
+            <GitCommit className="w-4 h-4 text-[#fabd2f] group-hover:translate-x-0.5 transition" />
           </div>
-          <div className="mt-2 text-2xl font-bold text-amber-400 font-mono">
+          <div className="mt-2 text-2xl font-bold text-[#fabd2f] font-mono">
             {stats.drifted_projects}
           </div>
-          <span className="text-[11px] text-gray-500 mt-1 block">PKGBUILD != HEAD</span>
+          <span className="text-[11px] text-[#928374] mt-1 block">PKGBUILD != HEAD</span>
         </Link>
 
         <Link
           href="/dependencies"
-          className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition block group"
+          className="bg-[#32302f] border border-[#504945] hover:border-[#665c54] rounded-xl p-5 transition block group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-400">Unique Packages</span>
-            <Package className="w-4 h-4 text-indigo-400 group-hover:translate-x-0.5 transition" />
+            <span className="text-xs font-medium text-[#a89984]">Unique Packages</span>
+            <Package className="w-4 h-4 text-[#d3869b] group-hover:translate-x-0.5 transition" />
           </div>
-          <div className="mt-2 text-2xl font-bold text-white font-mono">{stats.total_packages}</div>
-          <span className="text-[11px] text-gray-500 mt-1 block">Across 6 ecosystems</span>
+          <div className="mt-2 text-2xl font-bold text-[#fbf1c7] font-mono">{stats.total_packages}</div>
+          <span className="text-[11px] text-[#928374] mt-1 block">Indexed packages</span>
         </Link>
 
-        <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5">
+        <div className="bg-[#32302f] border border-[#504945] rounded-xl p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-400">Missing Packages</span>
-            <AlertTriangle className="w-4 h-4 text-red-400" />
+            <span className="text-xs font-medium text-[#a89984]">Missing Packages</span>
+            <AlertTriangle className="w-4 h-4 text-[#fb4934]" />
           </div>
-          <div className="mt-2 text-2xl font-bold text-red-400 font-mono">
+          <div className="mt-2 text-2xl font-bold text-[#fb4934] font-mono">
             {stats.missing_packages}
           </div>
-          <span className="text-[11px] text-gray-500 mt-1 block">Uninstalled dependencies</span>
+          <span className="text-[11px] text-[#928374] mt-1 block">Uninstalled dependencies</span>
         </div>
 
         <Link
           href="/security"
-          className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition block group"
+          className="bg-[#32302f] border border-[#504945] hover:border-[#665c54] rounded-xl p-5 transition block group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-400">Security Advisories</span>
+            <span className="text-xs font-medium text-[#a89984]">Security Advisories</span>
             {vulnCount > 0 ? (
-              <ShieldAlert className="w-4 h-4 text-red-400 group-hover:translate-x-0.5 transition" />
+              <ShieldAlert className="w-4 h-4 text-[#fb4934] group-hover:translate-x-0.5 transition" />
             ) : (
-              <ShieldCheck className="w-4 h-4 text-emerald-400 group-hover:translate-x-0.5 transition" />
+              <ShieldCheck className="w-4 h-4 text-[#b8bb26] group-hover:translate-x-0.5 transition" />
             )}
           </div>
-          <div className={`mt-2 text-2xl font-bold font-mono ${vulnCount > 0 ? "text-red-400" : "text-emerald-400"}`}>
+          <div className={`mt-2 text-2xl font-bold font-mono ${vulnCount > 0 ? "text-[#fb4934]" : "text-[#b8bb26]"}`}>
             {vulnCount}
           </div>
-          <span className="text-[11px] text-gray-500 mt-1 block">
-            {vulnCount > 0 ? "Action required" : "0 reported CVEs"}
+          <span className="text-[11px] text-[#928374] mt-1 block">
+            {vulnCount > 0 ? "Advisories flagged" : "0 reported CVEs"}
           </span>
         </Link>
       </div>
 
       {/* Ecosystem Distribution Bar */}
-      <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 backdrop-blur-sm">
-        <h3 className="text-sm font-bold text-white mb-3 flex items-center space-x-2">
-          <Layers className="w-4 h-4 text-blue-400" />
+      <div className="bg-[#32302f] border border-[#504945] rounded-xl p-6">
+        <h3 className="text-sm font-bold text-[#fbf1c7] mb-3 flex items-center space-x-2">
+          <Layers className="w-4 h-4 text-[#83a598]" />
           <span>Ecosystem Distribution</span>
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
@@ -190,11 +186,11 @@ export default async function DashboardPage() {
             <Link
               key={eco}
               href={`/projects?ecosystem=${eco}`}
-              className="p-3 rounded-xl bg-gray-950/40 border border-gray-800/60 hover:border-gray-700 transition block"
+              className="p-3 rounded-lg bg-[#282828] border border-[#3c3836] hover:border-[#504945] hover:bg-[#3c3836]/40 transition block"
             >
-              <span className="text-[11px] uppercase font-semibold text-gray-400 block">{eco}</span>
-              <span className="text-lg font-bold text-white font-mono">{count}</span>
-              <span className="text-[10px] text-gray-500 block">projects</span>
+              <span className="text-[11px] uppercase font-mono font-semibold text-[#fe8019] block">{eco}</span>
+              <span className="text-lg font-bold text-[#fbf1c7] font-mono">{count}</span>
+              <span className="text-[10px] text-[#928374] block">projects</span>
             </Link>
           ))}
         </div>

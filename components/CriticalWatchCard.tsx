@@ -13,28 +13,23 @@ export default function CriticalWatchCard({ watch }: CriticalWatchCardProps) {
 
   return (
     <div
-      className={`rounded-2xl p-5 border transition-all relative overflow-hidden backdrop-blur-sm ${
+      className={`rounded-xl p-5 border transition-colors ${
         isUpdateAvailable
-          ? "bg-amber-500/5 border-amber-500/30 hover:border-amber-500/50"
+          ? "bg-[#32302f] border-[#fabd2f]/50 hover:border-[#fabd2f]"
           : isUpToDate
-          ? "bg-gray-900/60 border-gray-800 hover:border-gray-700"
-          : "bg-red-500/5 border-red-500/30 hover:border-red-500/50"
+          ? "bg-[#32302f] border-[#504945] hover:border-[#665c54]"
+          : "bg-[#32302f] border-[#fb4934]/50 hover:border-[#fb4934]"
       }`}
     >
-      {/* Background glow */}
-      {isUpdateAvailable && (
-        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-3xl -z-10 rounded-full" />
-      )}
-
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-3">
           <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+            className={`w-10 h-10 rounded-lg border flex items-center justify-center ${
               isUpdateAvailable
-                ? "bg-amber-500/20 text-amber-400"
+                ? "bg-[#fabd2f]/15 text-[#fabd2f] border-[#fabd2f]/30"
                 : isUpToDate
-                ? "bg-blue-500/10 text-blue-400"
-                : "bg-red-500/20 text-red-400"
+                ? "bg-[#b8bb26]/15 text-[#b8bb26] border-[#b8bb26]/30"
+                : "bg-[#fb4934]/15 text-[#fb4934] border-[#fb4934]/30"
             }`}
           >
             {isUpdateAvailable ? (
@@ -47,29 +42,29 @@ export default function CriticalWatchCard({ watch }: CriticalWatchCardProps) {
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h3 className="font-bold text-white text-base tracking-tight">{watch.name}</h3>
-              <span className="text-[11px] px-2 py-0.5 rounded-md bg-gray-800 text-gray-300 font-mono">
+              <h3 className="font-bold text-[#fbf1c7] text-base tracking-tight">{watch.name}</h3>
+              <span className="text-[11px] px-2 py-0.5 rounded-md bg-[#282828] text-[#d5c4a1] border border-[#3c3836] font-mono">
                 {watch.installed_version}
               </span>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{watch.description}</p>
+            <p className="text-xs text-[#a89984] mt-0.5 line-clamp-1">{watch.description}</p>
           </div>
         </div>
 
         {/* Status Badge */}
         <div>
           {isUpToDate ? (
-            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#b8bb26]/15 text-[#b8bb26] border border-[#b8bb26]/30">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Compatible</span>
             </span>
           ) : isUpdateAvailable ? (
-            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">
+            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#fabd2f]/15 text-[#fabd2f] border border-[#fabd2f]/30">
               <ShieldAlert className="w-3.5 h-3.5" />
               <span>Update Ready</span>
             </span>
           ) : (
-            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#fb4934]/15 text-[#fb4934] border border-[#fb4934]/30">
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>Attention</span>
             </span>
@@ -78,43 +73,43 @@ export default function CriticalWatchCard({ watch }: CriticalWatchCardProps) {
       </div>
 
       {/* Version Comparison Bar */}
-      <div className="mt-4 pt-3 border-t border-gray-800/80 grid grid-cols-3 gap-2 text-xs">
-        <div className="bg-gray-950/40 p-2.5 rounded-xl border border-gray-800/40">
-          <span className="text-gray-400 block text-[11px]">Installed</span>
-          <span className="font-mono font-semibold text-gray-200">{watch.installed_version}</span>
+      <div className="mt-4 pt-3 border-t border-[#3c3836] grid grid-cols-3 gap-2 text-xs">
+        <div className="bg-[#282828] p-2.5 rounded-lg border border-[#3c3836]">
+          <span className="text-[#a89984] block text-[11px] font-mono">INSTALLED</span>
+          <span className="font-mono font-semibold text-[#ebdbb2]">{watch.installed_version}</span>
         </div>
-        <div className="bg-gray-950/40 p-2.5 rounded-xl border border-gray-800/40">
-          <span className="text-gray-400 block text-[11px]">Upstream</span>
+        <div className="bg-[#282828] p-2.5 rounded-lg border border-[#3c3836]">
+          <span className="text-[#a89984] block text-[11px] font-mono">UPSTREAM</span>
           <span
             className={`font-mono font-semibold ${
-              isUpdateAvailable ? "text-amber-400" : "text-gray-200"
+              isUpdateAvailable ? "text-[#fabd2f]" : "text-[#ebdbb2]"
             }`}
           >
             {watch.upstream_version}
           </span>
         </div>
-        <div className="bg-gray-950/40 p-2.5 rounded-xl border border-gray-800/40">
-          <span className="text-gray-400 block text-[11px] flex items-center space-x-1">
+        <div className="bg-[#282828] p-2.5 rounded-lg border border-[#3c3836]">
+          <span className="text-[#a89984] block text-[11px] flex items-center space-x-1 font-mono">
             <Clock className="w-3 h-3" />
-            <span>Age</span>
+            <span>AGE</span>
           </span>
-          <span className="font-medium text-gray-300">
+          <span className="font-medium text-[#d5c4a1]">
             {watch.age_days > 0 ? `${watch.age_days}d ago` : "Recent"}
           </span>
         </div>
       </div>
 
       {/* Dependents footer */}
-      <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
+      <div className="mt-3 flex items-center justify-between text-[11px] text-[#a89984]">
         <span className="flex items-center space-x-1.5">
-          <Box className="w-3.5 h-3.5 text-blue-400" />
+          <Box className="w-3.5 h-3.5 text-[#83a598]" />
           <span>
-            Required by <strong className="text-gray-200">{watch.dependents_count}</strong>{" "}
+            Required by <strong className="text-[#ebdbb2]">{watch.dependents_count}</strong>{" "}
             workspace project(s)
           </span>
         </span>
         {isUpdateAvailable && (
-          <span className="text-amber-400 font-medium">Test plugins before updating</span>
+          <span className="text-[#fabd2f] font-mono text-[10px]">Test plugins before updating</span>
         )}
       </div>
     </div>

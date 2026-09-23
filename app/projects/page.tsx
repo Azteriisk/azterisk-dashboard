@@ -33,7 +33,8 @@ export default function ProjectsPage() {
     fetchProjects();
   }, []);
 
-  const ecosystems = ["all", "arch", "node", "rust", "cpp", "go", "python"];
+  const detectedEcos = Array.from(new Set(projects.map((p) => p.ecosystem.toLowerCase()))).filter(Boolean).sort();
+  const ecosystems = ["all", ...detectedEcos];
   const statuses = ["all", "drifted", "unpinned", "synced"];
 
   const filtered = projects.filter((p) => {
@@ -81,8 +82,8 @@ export default function ProjectsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Project Explorer</h1>
-          <p className="text-xs text-gray-400">
+          <h1 className="text-2xl font-bold text-[#fbf1c7] tracking-tight">Project Explorer</h1>
+          <p className="text-xs text-[#a89984]">
             Tracked repositories, packaging pins, and commit states across all indexed folders
           </p>
         </div>
@@ -91,7 +92,7 @@ export default function ProjectsPage() {
           <button
             onClick={handleSyncAll}
             disabled={syncingAll}
-            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-sm shadow-blue-500/20 transition disabled:opacity-50"
+            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-[#d65d0e] hover:bg-[#fe8019] text-[#fbf1c7] text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
           >
             <GitCommit className={`w-4 h-4 ${syncingAll ? "animate-spin" : ""}`} />
             <span>{syncingAll ? "Syncing..." : `Sync All (${driftedCount} drifted)`}</span>
@@ -100,22 +101,22 @@ export default function ProjectsPage() {
       </div>
 
       {syncAllMsg && (
-        <div className="p-3 bg-blue-500/10 border border-blue-500/20 text-blue-300 rounded-xl text-xs flex items-center space-x-2">
-          <CheckCircle2 className="w-4 h-4" />
+        <div className="p-3 bg-[#b8bb26]/15 border border-[#b8bb26]/30 text-[#b8bb26] rounded-xl text-xs flex items-center space-x-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{syncAllMsg}</span>
         </div>
       )}
 
       {/* Filters & Search */}
-      <div className="flex flex-col md:flex-row gap-3 items-center justify-between bg-gray-900/60 p-4 rounded-2xl border border-gray-800">
+      <div className="flex flex-col md:flex-row gap-3 items-center justify-between bg-[#32302f] p-4 rounded-xl border border-[#504945]">
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#7c6f64] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name, ID, or path..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl bg-gray-950/60 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500/50 transition"
+            className="w-full pl-9 pr-4 py-2 rounded-lg bg-[#282828] border border-[#504945] text-xs text-[#ebdbb2] placeholder-[#7c6f64] focus:outline-none focus:border-[#fe8019] font-mono transition"
           />
         </div>
 
@@ -125,10 +126,10 @@ export default function ProjectsPage() {
             <button
               key={eco}
               onClick={() => setSelectedEco(eco)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium uppercase transition ${
+              className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium uppercase transition cursor-pointer ${
                 selectedEco === eco
-                  ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20"
-                  : "bg-gray-950/40 text-gray-400 hover:text-white hover:bg-gray-800"
+                  ? "bg-[#fe8019] text-[#1d2021] font-semibold"
+                  : "bg-[#282828] text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#3c3836] border border-[#3c3836]"
               }`}
             >
               {eco}
@@ -142,10 +143,10 @@ export default function ProjectsPage() {
             <button
               key={st}
               onClick={() => setSelectedStatus(st)}
-              className={`px-2.5 py-1 rounded-lg text-xs capitalize transition ${
+              className={`px-2.5 py-1 rounded-md text-xs font-mono capitalize transition cursor-pointer ${
                 selectedStatus === st
-                  ? "bg-gray-800 text-white border border-gray-700 font-semibold"
-                  : "text-gray-400 hover:text-white"
+                  ? "bg-[#3c3836] text-[#fbf1c7] border border-[#504945] font-semibold"
+                  : "text-[#a89984] hover:text-[#ebdbb2]"
               }`}
             >
               {st}
@@ -156,12 +157,12 @@ export default function ProjectsPage() {
 
       {/* Projects Grid */}
       {loading ? (
-        <div className="py-16 text-center text-gray-500 flex flex-col items-center justify-center space-y-2">
-          <RefreshCw className="w-6 h-6 animate-spin text-blue-400" />
+        <div className="py-16 text-center text-[#a89984] flex flex-col items-center justify-center space-y-2">
+          <RefreshCw className="w-6 h-6 animate-spin text-[#fe8019]" />
           <span className="text-xs">Loading workspace projects...</span>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-gray-500 bg-gray-900/30 rounded-2xl border border-gray-800/40">
+        <div className="py-16 text-center text-[#a89984] bg-[#32302f]/60 rounded-xl border border-[#504945]">
           No projects match your search or filter.
         </div>
       ) : (

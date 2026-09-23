@@ -8,11 +8,11 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2">
-          <Settings className="w-6 h-6 text-blue-400" />
+        <h1 className="text-2xl font-bold text-[#fbf1c7] tracking-tight flex items-center space-x-2">
+          <Settings className="w-6 h-6 text-[#83a598]" />
           <span>Workspace Settings</span>
         </h1>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-[#a89984]">
           Configure scanned directory roots, active projects, and real-time dependency radar tracking
         </p>
       </div>
