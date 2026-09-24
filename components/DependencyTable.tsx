@@ -17,6 +17,7 @@ import {
   HardDrive,
   Layers,
   Sparkles,
+  CheckSquare,
 } from "lucide-react";
 
 interface DependencyTableProps {
@@ -38,6 +39,10 @@ export default function DependencyTable({
       : "all"
   );
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
+
+  // Multi-select & Batch Actions State
+  const [selectedPkgs, setSelectedPkgs] = useState<Set<string>>(new Set());
+  const [batchInstallingGlobal, setBatchInstallingGlobal] = useState(false);
 
   const [installingPkg, setInstallingPkg] = useState<string | null>(null);
   const [installingGlobalPkg, setInstallingGlobalPkg] = useState<string | null>(null);
@@ -150,6 +155,98 @@ export default function DependencyTable({
       setTimeout(() => {
         setFeedback((prev) => (prev?.type === "success" ? null : prev));
       }, 6000);
+    }
+  };
+
+  // Selection helpers
+  const isAllFilteredSelected =
+    filtered.length > 0 && filtered.every((p) => selectedPkgs.has(p.name));
+  const isSomeFilteredSelected =
+    filtered.some((p) => selectedPkgs.has(p.name)) && !isAllFilteredSelected;
+
+  const toggleSelectAllFiltered = () => {
+    if (isAllFilteredSelected) {
+      setSelectedPkgs((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((p) => next.delete(p.name));
+        return next;
+      });
+    } else {
+      setSelectedPkgs((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((p) => next.add(p.name));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectPkg = (name: string, checked: boolean) => {
+    setSelectedPkgs((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(name);
+      else next.delete(name);
+      return next;
+    });
+  };
+
+  const handleSelectAllShared = () => {
+    setSelectedPkgs(new Set(sharedPackages.map((p) => p.name)));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedPkgs(new Set());
+  };
+
+  const selectedMissingCount = packages.filter(
+    (p) => selectedPkgs.has(p.name) && !p.installed
+  ).length;
+
+  const handleBatchGlobalInstall = async (pkgsToInstall?: Package[]) => {
+    const targetPkgs = pkgsToInstall || packages.filter((p) => selectedPkgs.has(p.name));
+    if (targetPkgs.length === 0) return;
+
+    setBatchInstallingGlobal(true);
+    setFeedback(null);
+
+    try {
+      const res = await fetch("/api/dependencies/install-global", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          packages: targetPkgs.map((p) => ({
+            name: p.name,
+            ecosystem: p.pkg_type,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.requires_auth && data.command) {
+        handleCopy(data.command, "bulk-global");
+        setFeedback({
+          type: "warn",
+          text: data.message || "Root authorization required — command copied to clipboard for your terminal!",
+        });
+      } else if (data.success) {
+        setFeedback({
+          type: "success",
+          text: data.message || `Successfully installed ${targetPkgs.length} package(s) globally!`,
+        });
+        setSelectedPkgs(new Set());
+        if (onRefresh) onRefresh();
+      } else {
+        setFeedback({
+          type: "error",
+          text: data.message || data.error || "Batch global installation failed.",
+        });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err.message || "Global install request failed." });
+    } finally {
+      setBatchInstallingGlobal(false);
+      setTimeout(() => {
+        setFeedback((prev) => (prev?.type === "success" ? null : prev));
+      }, 7000);
     }
   };
 
@@ -320,6 +417,110 @@ export default function DependencyTable({
               </div>
             </div>
           </div>
+
+          {/* Quick Actions for Shared Dependencies */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#83a598]/20">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => handleBatchGlobalInstall(sharedPackages)}
+                disabled={batchInstallingGlobal || installingAll || sharedPackages.length === 0}
+                className="px-3.5 py-1.5 rounded-lg bg-[#83a598] hover:bg-[#83a598]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
+                title="Install all shared packages globally on host system"
+              >
+                {batchInstallingGlobal ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Installing All Shared...</span>
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>Install All Shared Globally ({sharedPackages.length})</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleSelectAllShared}
+                disabled={sharedPackages.length === 0}
+                className="px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-[#3c3836] border border-[#83a598]/40 text-[#83a598] hover:text-[#fbf1c7] font-mono text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                <span>Select All Shared ({sharedPackages.length})</span>
+              </button>
+
+              {selectedPkgs.size > 0 && (
+                <button
+                  onClick={handleClearSelection}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-mono text-[#a89984] hover:text-[#fbf1c7] cursor-pointer"
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
+
+            <span className="text-[11px] font-mono text-[#83a598]">
+              {sharedPackages.length} packages eligible for host-wide deduplication
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Floating / Sticky Bulk Action Bar */}
+      {selectedPkgs.size > 0 && (
+        <div className="bg-[#282828] border-2 border-[#83a598] rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center space-x-3">
+            <span className="w-6 h-6 rounded-md bg-[#83a598]/20 border border-[#83a598]/40 flex items-center justify-center text-[#83a598]">
+              <Check className="w-3.5 h-3.5" />
+            </span>
+            <span className="text-xs font-mono text-[#ebdbb2]">
+              <strong className="text-[#fbf1c7]">{selectedPkgs.size}</strong> of {filtered.length} package(s) selected
+            </span>
+            <span className="text-[#504945]">•</span>
+            <button
+              onClick={handleClearSelection}
+              className="text-xs text-[#a89984] hover:text-[#fbf1c7] underline cursor-pointer font-mono"
+            >
+              Deselect all
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleBatchGlobalInstall()}
+              disabled={batchInstallingGlobal || installingAll}
+              className="px-3.5 py-1.5 rounded-lg bg-[#83a598] hover:bg-[#83a598]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
+            >
+              {batchInstallingGlobal ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Installing Global...</span>
+                </>
+              ) : (
+                <>
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Install Selected Globally ({selectedPkgs.size})</span>
+                </>
+              )}
+            </button>
+
+            {selectedMissingCount > 0 && (
+              <button
+                onClick={() =>
+                  handleInstall(
+                    Array.from(selectedPkgs).filter((n) =>
+                      packages.find((p) => p.name === n && !p.installed)
+                    )
+                  )
+                }
+                disabled={installingAll || batchInstallingGlobal}
+                className="px-3 py-1.5 rounded-lg bg-[#fb4934] hover:bg-[#fb4934]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Install Missing Selected ({selectedMissingCount})</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -427,6 +628,18 @@ export default function DependencyTable({
           <table className="w-full text-left text-xs">
             <thead className="bg-[#282828] text-[#a89984] border-b border-[#504945] font-mono">
               <tr>
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllFilteredSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = isSomeFilteredSelected;
+                    }}
+                    onChange={toggleSelectAllFiltered}
+                    className="w-4 h-4 rounded border-[#504945] bg-[#1d2021] text-[#83a598] focus:ring-[#83a598] cursor-pointer accent-[#83a598]"
+                    title={isAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
+                  />
+                </th>
                 <th className="py-3 px-4">Package</th>
                 <th className="py-3 px-4">Type</th>
                 <th className="py-3 px-4">Installed Version</th>
@@ -438,7 +651,7 @@ export default function DependencyTable({
             <tbody className="divide-y divide-[#3c3836]">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-[#a89984]">
+                  <td colSpan={7} className="py-8 text-center text-[#a89984]">
                     No packages found matching your criteria.
                   </td>
                 </tr>
@@ -446,17 +659,29 @@ export default function DependencyTable({
                 filtered.map((pkg) => {
                   const isExpanded = expandedPkg === pkg.name;
                   const isMissing = !pkg.installed;
+                  const isSelected = selectedPkgs.has(pkg.name);
 
                   return (
                     <tr
                       key={pkg.name}
                       className={`transition group cursor-pointer ${
-                        isMissing
+                        isSelected
+                          ? "bg-[#83a598]/10 border-l-4 border-l-[#83a598] hover:bg-[#83a598]/15"
+                          : isMissing
                           ? "bg-[#fb4934]/5 border-l-4 border-l-[#fb4934] hover:bg-[#fb4934]/10"
                           : "hover:bg-[#3c3836]/40"
                       }`}
                       onClick={() => setExpandedPkg(isExpanded ? null : pkg.name)}
                     >
+                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => toggleSelectPkg(pkg.name, e.target.checked)}
+                          className="w-4 h-4 rounded border-[#504945] bg-[#282828] text-[#83a598] focus:ring-[#83a598] cursor-pointer accent-[#83a598]"
+                          title={`Select ${pkg.name}`}
+                        />
+                      </td>
                       <td className="py-3 px-4 font-mono font-medium text-[#fbf1c7] flex items-center space-x-2">
                         <Box
                           className={`w-3.5 h-3.5 flex-shrink-0 ${
