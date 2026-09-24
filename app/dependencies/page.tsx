@@ -12,6 +12,7 @@ function DependenciesContent() {
 
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rescanning, setRescanning] = useState(false);
 
   const fetchPackages = async () => {
     setLoading(true);
@@ -28,13 +29,25 @@ function DependenciesContent() {
     }
   };
 
+  const handleRescan = async () => {
+    setRescanning(true);
+    try {
+      await fetch("/api/dependencies", { method: "POST" });
+      await fetchPackages();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRescanning(false);
+    }
+  };
+
   useEffect(() => {
     fetchPackages();
   }, []);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#fbf1c7] tracking-tight flex items-center space-x-2">
             <PackageIcon className="w-6 h-6 text-[#83a598]" />
@@ -44,6 +57,15 @@ function DependenciesContent() {
             Inspect all tracked packages across Arch, AUR, npm, Cargo, Pip, and Go ecosystems
           </p>
         </div>
+
+        <button
+          onClick={handleRescan}
+          disabled={rescanning || loading}
+          className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] text-xs font-mono transition cursor-pointer disabled:opacity-50 shrink-0 self-start sm:self-auto"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${rescanning ? "animate-spin text-[#fe8019]" : ""}`} />
+          <span>{rescanning ? "Scanning..." : "Rescan Workspace"}</span>
+        </button>
       </div>
 
       {loading ? (

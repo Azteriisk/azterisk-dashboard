@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCatalogData } from "@/lib/catalog";
+import { getCatalogData, triggerRescan, isLocalEnvironment } from "@/lib/catalog";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,6 +38,22 @@ export async function GET(req: NextRequest) {
       total: packages.length,
       packages,
     });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function POST() {
+  try {
+    if (!isLocalEnvironment()) {
+      return NextResponse.json(
+        { error: "Workspace re-scanning is only available in local Linux environment." },
+        { status: 403 }
+      );
+    }
+
+    const result = await triggerRescan();
+    return NextResponse.json(result);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

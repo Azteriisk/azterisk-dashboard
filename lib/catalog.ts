@@ -132,7 +132,7 @@ export async function triggerRescan(): Promise<{ success: boolean; message: stri
     const config = await getCatalogConfig();
     const dirsArg = config.indexed_directories.join(",");
     const { stdout, stderr } = await execAsync(
-      `azterisk-catalog scan --projects-dir="${dirsArg}"`
+      `azterisk-catalog --projects-dir="${dirsArg}" scan`
     );
     return { success: true, message: stdout.trim() || stderr.trim() };
   } catch (err: any) {
