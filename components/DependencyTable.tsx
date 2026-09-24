@@ -47,6 +47,7 @@ export default function DependencyTable({
   const [deduplicating, setDeduplicating] = useState(false);
   const [deduplicatingPkg, setDeduplicatingPkg] = useState<string | null>(null);
   const [reclaimedStats, setReclaimedStats] = useState<{ bytes: number; formatted: string; projects: number } | null>(null);
+  const [minSharedThreshold, setMinSharedThreshold] = useState<number>(4);
 
   const [installingPkg, setInstallingPkg] = useState<string | null>(null);
   const [installingGlobalPkg, setInstallingGlobalPkg] = useState<string | null>(null);
@@ -70,6 +71,10 @@ export default function DependencyTable({
   const missingPackages = packages.filter((p) => !p.installed);
   const installedPackages = packages.filter((p) => p.installed);
   const sharedPackages = packages.filter((p) => p.required_by && p.required_by.length >= 2);
+  const coreSharedPackages = packages.filter((p) => p.required_by && p.required_by.length >= 4);
+  const targetSharedPackages = packages.filter(
+    (p) => p.required_by && p.required_by.length >= minSharedThreshold
+  );
 
   const filtered = packages.filter((pkg) => {
     const matchesType =
@@ -78,7 +83,7 @@ export default function DependencyTable({
       selectedStatus === "all" ||
       (selectedStatus === "missing" && !pkg.installed) ||
       (selectedStatus === "installed" && pkg.installed) ||
-      (selectedStatus === "shared" && pkg.required_by && pkg.required_by.length >= 2);
+      (selectedStatus === "shared" && pkg.required_by && pkg.required_by.length >= minSharedThreshold);
     const matchesQuery =
       pkg.name.toLowerCase().includes(query.toLowerCase()) ||
       pkg.required_by.some((req) => req.toLowerCase().includes(query.toLowerCase()));
@@ -90,9 +95,21 @@ export default function DependencyTable({
   }
 
   const handleCopy = (cmd: string, id: string) => {
-    navigator.clipboard.writeText(cmd);
-    setCopiedCmd(id);
-    setTimeout(() => setCopiedCmd(null), 2000);
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        navigator.clipboard
+          .writeText(cmd)
+          .then(() => {
+            setCopiedCmd(id);
+            setTimeout(() => setCopiedCmd(null), 2000);
+          })
+          .catch(() => {
+            // Silently swallow lack of user activation; the UI displays the command and re-copy button
+          });
+      }
+    } catch {
+      // Ignore clipboard write restrictions
+    }
   };
 
   const handleInstall = async (pkgNames: string[]) => {
@@ -453,8 +470,35 @@ export default function DependencyTable({
                 Migrate Repeated Dependencies &amp; Host 1 Copy Globally
               </h3>
               <p className="text-xs text-[#a89984] max-w-2xl leading-relaxed">
-                Found <strong className="text-[#ebdbb2]">{sharedPackages.length} packages</strong> duplicated across separate workspace project directories. You can host 1 global copy to reclaim drive space using the workflows below:
+                Found <strong className="text-[#ebdbb2]">{targetSharedPackages.length} packages</strong> duplicated across {minSharedThreshold}+ workspace project directories. You can host 1 global copy to reclaim drive space using the workflows below:
               </p>
+            </div>
+
+            {/* Threshold Filter Toggle */}
+            <div className="flex items-center space-x-1 bg-[#282828] p-1 rounded-lg border border-[#3c3836] shrink-0 self-start sm:self-auto">
+              <span className="text-[11px] font-mono text-[#a89984] px-2">Show:</span>
+              <button
+                onClick={() => setMinSharedThreshold(4)}
+                className={`px-2.5 py-1 rounded text-xs font-mono font-medium transition cursor-pointer ${
+                  minSharedThreshold === 4
+                    ? "bg-[#fabd2f] text-[#1d2021] font-bold shadow-xs"
+                    : "text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]"
+                }`}
+                title="Filter to high-impact packages shared across 4 or more projects"
+              >
+                4+ Projects ({coreSharedPackages.length})
+              </button>
+              <button
+                onClick={() => setMinSharedThreshold(2)}
+                className={`px-2.5 py-1 rounded text-xs font-mono font-medium transition cursor-pointer ${
+                  minSharedThreshold === 2
+                    ? "bg-[#83a598] text-[#1d2021] font-bold shadow-xs"
+                    : "text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]"
+                }`}
+                title="Show all packages shared across 2 or more projects"
+              >
+                All Shared ({sharedPackages.length})
+              </button>
             </div>
           </div>
 
@@ -512,10 +556,14 @@ export default function DependencyTable({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#83a598]/20">
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => handleDeduplicate({ allShared: true })}
-                disabled={deduplicating || batchInstallingGlobal || installingAll || sharedPackages.length === 0}
+                onClick={() =>
+                  minSharedThreshold === 2
+                    ? handleDeduplicate({ allShared: true })
+                    : handleDeduplicate({ packages: targetSharedPackages })
+                }
+                disabled={deduplicating || batchInstallingGlobal || installingAll || targetSharedPackages.length === 0}
                 className="px-3.5 py-1.5 rounded-lg bg-[#fabd2f] hover:bg-[#fabd2f]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 shadow-xs"
-                title="Host 1 copy globally, link all projects, and remove duplicate directories"
+                title={`Host 1 copy globally, link all projects, and remove duplicate directories for ${targetSharedPackages.length} packages`}
               >
                 {deduplicating ? (
                   <>
@@ -525,37 +573,41 @@ export default function DependencyTable({
                 ) : (
                   <>
                     <HardDrive className="w-3.5 h-3.5" />
-                    <span>Deduplicate &amp; Free Space (All {sharedPackages.length} Shared)</span>
+                    <span>
+                      Deduplicate &amp; Free Space ({minSharedThreshold === 4 ? `4+ Projects: ${coreSharedPackages.length}` : `All ${sharedPackages.length}`})
+                    </span>
                   </>
                 )}
               </button>
 
               <button
-                onClick={() => handleBatchGlobalInstall(sharedPackages)}
-                disabled={batchInstallingGlobal || deduplicating || installingAll || sharedPackages.length === 0}
+                onClick={() => handleBatchGlobalInstall(targetSharedPackages)}
+                disabled={batchInstallingGlobal || deduplicating || installingAll || targetSharedPackages.length === 0}
                 className="px-3.5 py-1.5 rounded-lg bg-[#83a598] hover:bg-[#83a598]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
-                title="Install all shared packages globally on host system"
+                title={`Install ${targetSharedPackages.length} packages globally on host system`}
               >
                 {batchInstallingGlobal ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Installing All Shared...</span>
+                    <span>Installing Global...</span>
                   </>
                 ) : (
                   <>
                     <Globe className="w-3.5 h-3.5" />
-                    <span>Install All Shared Globally ({sharedPackages.length})</span>
+                    <span>
+                      Install Globally ({minSharedThreshold === 4 ? `4+ Projects: ${coreSharedPackages.length}` : `All ${sharedPackages.length}`})
+                    </span>
                   </>
                 )}
               </button>
 
               <button
-                onClick={handleSelectAllShared}
-                disabled={sharedPackages.length === 0}
+                onClick={() => setSelectedPkgs(new Set(targetSharedPackages.map((p) => p.name)))}
+                disabled={targetSharedPackages.length === 0}
                 className="px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-[#3c3836] border border-[#83a598]/40 text-[#83a598] hover:text-[#fbf1c7] font-mono text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
               >
                 <CheckSquare className="w-3.5 h-3.5" />
-                <span>Select All Shared ({sharedPackages.length})</span>
+                <span>Select ({targetSharedPackages.length})</span>
               </button>
 
               {selectedPkgs.size > 0 && (
@@ -576,7 +628,7 @@ export default function DependencyTable({
                 </span>
               )}
               <span className="text-[11px] font-mono text-[#83a598]">
-                {sharedPackages.length} packages eligible for host-wide deduplication
+                {targetSharedPackages.length} packages shown ({minSharedThreshold}+ projects)
               </span>
             </div>
           </div>
