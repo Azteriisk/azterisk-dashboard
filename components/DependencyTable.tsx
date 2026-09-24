@@ -18,6 +18,7 @@ import {
   Layers,
   Sparkles,
   CheckSquare,
+  X,
 } from "lucide-react";
 
 interface DependencyTableProps {
@@ -43,12 +44,15 @@ export default function DependencyTable({
   // Multi-select & Batch Actions State
   const [selectedPkgs, setSelectedPkgs] = useState<Set<string>>(new Set());
   const [batchInstallingGlobal, setBatchInstallingGlobal] = useState(false);
+  const [deduplicating, setDeduplicating] = useState(false);
+  const [deduplicatingPkg, setDeduplicatingPkg] = useState<string | null>(null);
+  const [reclaimedStats, setReclaimedStats] = useState<{ bytes: number; formatted: string; projects: number } | null>(null);
 
   const [installingPkg, setInstallingPkg] = useState<string | null>(null);
   const [installingGlobalPkg, setInstallingGlobalPkg] = useState<string | null>(null);
   const [installingAll, setInstallingAll] = useState(false);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "warn" | "error"; text: string; command?: string } | null>(null);
 
   useEffect(() => {
     if (
@@ -250,8 +254,121 @@ export default function DependencyTable({
     }
   };
 
+  const handleDeduplicate = async (options: {
+    allShared?: boolean;
+    packages?: Package[];
+    packageName?: string;
+  }) => {
+    if (options.packageName) {
+      setDeduplicatingPkg(options.packageName);
+    } else {
+      setDeduplicating(true);
+    }
+    setFeedback(null);
+
+    try {
+      const payload: any = {};
+      if (options.allShared) {
+        payload.all_shared = true;
+      } else if (options.packages) {
+        payload.packages = options.packages.map((p) => p.name);
+      } else if (options.packageName) {
+        payload.package_name = options.packageName;
+      }
+
+      const res = await fetch("/api/dependencies/deduplicate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (data.requires_auth && data.command) {
+        handleCopy(data.command, "bulk-dedup");
+        setFeedback({
+          type: "warn",
+          text: data.message || "Root authorization required — command copied to clipboard for your terminal!",
+          command: data.command,
+        });
+      } else if (data.success) {
+        setFeedback({
+          type: "success",
+          text:
+            data.message ||
+            `Deduplication complete: freed ${data.formatted_space} across ${data.projects_linked} project instances!`,
+        });
+        if (data.bytes_reclaimed > 0) {
+          setReclaimedStats({
+            bytes: data.bytes_reclaimed,
+            formatted: data.formatted_space,
+            projects: data.projects_linked,
+          });
+        }
+        if (options.packages) {
+          setSelectedPkgs(new Set());
+        }
+        if (onRefresh) onRefresh();
+      } else {
+        setFeedback({
+          type: "error",
+          text: data.error || data.message || "Deduplication failed.",
+        });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err.message || "Deduplication request failed." });
+    } finally {
+      setDeduplicating(false);
+      setDeduplicatingPkg(null);
+      setTimeout(() => {
+        setFeedback((prev) => (prev?.type === "success" ? null : prev));
+      }, 10000);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Global Action Feedback Alert */}
+      {feedback && (
+        <div
+          className={`p-3 rounded-xl text-xs font-mono border flex items-center justify-between shadow-xs transition-all ${
+            feedback.type === "success"
+              ? "bg-[#b8bb26]/15 border-[#b8bb26]/30 text-[#b8bb26]"
+              : feedback.type === "warn"
+              ? "bg-[#fabd2f]/15 border-[#fabd2f]/30 text-[#fabd2f]"
+              : "bg-[#fb4934]/15 border-[#fb4934]/30 text-[#fb4934]"
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            {feedback.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-[#b8bb26]" />
+            ) : feedback.type === "warn" ? (
+              <AlertTriangle className="w-4 h-4 shrink-0 text-[#fabd2f]" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0 text-[#fb4934]" />
+            )}
+            <span>{feedback.text}</span>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            {feedback.command && (
+              <button
+                onClick={() => handleCopy(feedback.command!, "feedback-cmd")}
+                className="text-[11px] underline cursor-pointer hover:opacity-80 flex items-center space-x-1"
+              >
+                <span>{copiedCmd === "feedback-cmd" ? "Copied!" : "Re-copy Command"}</span>
+              </button>
+            )}
+            <button
+              onClick={() => setFeedback(null)}
+              className="p-1 rounded hover:bg-black/10 cursor-pointer"
+              title="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Missing Dependencies Action Banner */}
       {missingPackages.length > 0 && (
         <div className="bg-[#32302f] border border-[#fb4934]/40 rounded-xl p-4 sm:p-5 bg-gradient-to-r from-[#fb4934]/10 via-[#32302f] to-[#32302f] shadow-xs">
@@ -320,33 +437,6 @@ export default function DependencyTable({
               </button>
             </div>
           </div>
-
-          {feedback && (
-            <div
-              className={`mt-3 p-2.5 rounded-lg text-xs font-mono border flex items-center justify-between ${
-                feedback.type === "success"
-                  ? "bg-[#b8bb26]/15 border-[#b8bb26]/30 text-[#b8bb26]"
-                  : feedback.type === "warn"
-                  ? "bg-[#fabd2f]/15 border-[#fabd2f]/30 text-[#fabd2f]"
-                  : "bg-[#fb4934]/15 border-[#fb4934]/30 text-[#fb4934]"
-              }`}
-            >
-              <span>{feedback.text}</span>
-              {feedback.type === "warn" && (
-                <button
-                  onClick={() =>
-                    handleCopy(
-                      `yay -S --needed ${missingPackages.map((p) => p.name).join(" ")}`,
-                      "banner"
-                    )
-                  }
-                  className="text-[11px] text-[#ebdbb2] underline cursor-pointer ml-2 hover:text-[#fbf1c7]"
-                >
-                  Re-copy Command
-                </button>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -419,11 +509,30 @@ export default function DependencyTable({
           </div>
 
           {/* Quick Actions for Shared Dependencies */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#83a598]/20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#83a598]/20">
             <div className="flex flex-wrap items-center gap-2">
               <button
+                onClick={() => handleDeduplicate({ allShared: true })}
+                disabled={deduplicating || batchInstallingGlobal || installingAll || sharedPackages.length === 0}
+                className="px-3.5 py-1.5 rounded-lg bg-[#fabd2f] hover:bg-[#fabd2f]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 shadow-xs"
+                title="Host 1 copy globally, link all projects, and remove duplicate directories"
+              >
+                {deduplicating ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deduplicating &amp; Freeing Space...</span>
+                  </>
+                ) : (
+                  <>
+                    <HardDrive className="w-3.5 h-3.5" />
+                    <span>Deduplicate &amp; Free Space (All {sharedPackages.length} Shared)</span>
+                  </>
+                )}
+              </button>
+
+              <button
                 onClick={() => handleBatchGlobalInstall(sharedPackages)}
-                disabled={batchInstallingGlobal || installingAll || sharedPackages.length === 0}
+                disabled={batchInstallingGlobal || deduplicating || installingAll || sharedPackages.length === 0}
                 className="px-3.5 py-1.5 rounded-lg bg-[#83a598] hover:bg-[#83a598]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
                 title="Install all shared packages globally on host system"
               >
@@ -459,9 +568,17 @@ export default function DependencyTable({
               )}
             </div>
 
-            <span className="text-[11px] font-mono text-[#83a598]">
-              {sharedPackages.length} packages eligible for host-wide deduplication
-            </span>
+            <div className="flex items-center space-x-3 shrink-0">
+              {reclaimedStats && (
+                <span className="text-[11px] font-mono text-[#b8bb26] flex items-center space-x-1 bg-[#b8bb26]/10 px-2 py-0.5 rounded border border-[#b8bb26]/20">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>Freed {reclaimedStats.formatted}</span>
+                </span>
+              )}
+              <span className="text-[11px] font-mono text-[#83a598]">
+                {sharedPackages.length} packages eligible for host-wide deduplication
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -487,9 +604,32 @@ export default function DependencyTable({
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
+              onClick={() =>
+                handleDeduplicate({
+                  packages: packages.filter((p) => selectedPkgs.has(p.name)),
+                })
+              }
+              disabled={deduplicating || batchInstallingGlobal || installingAll}
+              className="px-3.5 py-1.5 rounded-lg bg-[#fabd2f] hover:bg-[#fabd2f]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
+              title="Deduplicate selected packages: host globally, link projects, and reclaim space"
+            >
+              {deduplicating ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Deduplicating ({selectedPkgs.size})...</span>
+                </>
+              ) : (
+                <>
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span>Deduplicate &amp; Free Space ({selectedPkgs.size})</span>
+                </>
+              )}
+            </button>
+
+            <button
               onClick={() => handleBatchGlobalInstall()}
-              disabled={batchInstallingGlobal || installingAll}
-              className="px-3.5 py-1.5 rounded-lg bg-[#83a598] hover:bg-[#83a598]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
+              disabled={batchInstallingGlobal || deduplicating || installingAll}
+              className="px-3 py-1.5 rounded-lg bg-[#83a598] hover:bg-[#83a598]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
             >
               {batchInstallingGlobal ? (
                 <>
@@ -513,7 +653,7 @@ export default function DependencyTable({
                     )
                   )
                 }
-                disabled={installingAll || batchInstallingGlobal}
+                disabled={installingAll || batchInstallingGlobal || deduplicating}
                 className="px-3 py-1.5 rounded-lg bg-[#fb4934] hover:bg-[#fb4934]/90 text-[#1d2021] font-mono font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -777,11 +917,26 @@ export default function DependencyTable({
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-end space-x-2">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            {pkg.required_by.length >= 2 && (
+                              <button
+                                onClick={() => handleDeduplicate({ packageName: pkg.name })}
+                                disabled={deduplicatingPkg === pkg.name || installingGlobalPkg === pkg.name}
+                                className="px-2 py-0.5 rounded bg-[#fabd2f]/15 hover:bg-[#fabd2f]/25 border border-[#fabd2f]/40 text-[#fabd2f] font-mono text-[10px] flex items-center space-x-1 cursor-pointer transition disabled:opacity-50"
+                                title={`Deduplicate ${pkg.name}: install globally, link all ${pkg.required_by.length} project(s), and remove local duplicates to free space`}
+                              >
+                                {deduplicatingPkg === pkg.name ? (
+                                  <RefreshCw className="w-2.5 h-2.5 animate-spin text-[#fabd2f]" />
+                                ) : (
+                                  <HardDrive className="w-2.5 h-2.5" />
+                                )}
+                                <span>Deduplicate</span>
+                              </button>
+                            )}
                             {pkg.required_by.length >= 2 && (
                               <button
                                 onClick={() => handleGlobalInstall(pkg)}
-                                disabled={installingGlobalPkg === pkg.name}
+                                disabled={installingGlobalPkg === pkg.name || deduplicatingPkg === pkg.name}
                                 className="px-2 py-0.5 rounded bg-[#282828] hover:bg-[#3c3836] border border-[#83a598]/40 text-[#83a598] hover:text-[#ebdbb2] font-mono text-[10px] flex items-center space-x-1 cursor-pointer transition disabled:opacity-50"
                                 title={`Install ${pkg.name} globally on host`}
                               >
@@ -790,7 +945,7 @@ export default function DependencyTable({
                                 ) : (
                                   <Globe className="w-2.5 h-2.5" />
                                 )}
-                                <span>Install Global</span>
+                                <span>Global</span>
                               </button>
                             )}
                             <span className="text-[#7c6f64] font-mono text-[11px]">Ready</span>
